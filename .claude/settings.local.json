@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /b \"E:\\\\dot_net\\\\ComfyShell\\\\WpfDesktop\")",
+      "Bash(dotnet build)",
+      "Bash(timeout 5 dotnet run)",
+      "Bash(dir \"E:\\\\dot_net\\\\ComfyShell\\\\WpfDesktop\\\\Views\" /b)",
+      "WebSearch",
+      "Bash(dotnet build --no-restore)",
+      "Bash(dir \"%LOCALAPPDATA%\\\\ComfyShell\" /s)",
+      "Bash(dotnet add package LibreHardwareMonitorLib)",
+      "Bash(ls *.xaml)",
+      "Bash(Get-ChildItem -Path \"E:\\\\dot_net\\\\ComfyShell\\\\WpfDesktop\" -Recurse -Filter \"*.xaml\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(dotnet build WpfDesktop.sln)",
+      "Bash(dir /s /b MainWindow.xaml)",
+      "Bash(dotnet build E:dot_netComfyShellWpfDesktopWpfDesktop.sln)",
+      "WebFetch(domain:docs.comfy.org)",
+      "Bash(dotnet build E:dot_netComfyShellWpfDesktopWpfDesktop.csproj)",
+      "Bash(dotnet build WpfDesktop.csproj)"
+    ]
+  }
+}
