@@ -7,11 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.Extensions.Configuration.Binder.SourceGeneration</InterceptorsNamespaces>
-    <ApplicationIcon>DaVinci Fusion Studio.ico</ApplicationIcon>
+    <ApplicationIcon>logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="DaVinci Fusion Studio.ico" />
+    <Content Include="logo.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Resources\model_descriptions.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -9,6 +9,12 @@ namespace WpfDesktop.Services;
 
 public class GitService : IGitService
 {
+    private readonly IProxyService _proxyService;
+
+    public GitService(IProxyService proxyService)
+    {
+        _proxyService = proxyService;
+    }
     public async Task<bool> IsGitRepositoryAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
@@ -186,6 +192,9 @@ public class GitService : IGitService
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8
         };
+
+        // 配置代理环境变量
+        _proxyService.ConfigureProcessProxy(startInfo);
 
         using var process = new Process { StartInfo = startInfo };
         var outputBuilder = new StringBuilder();

@@ -19,6 +19,8 @@ namespace WpfDesktop
         private IHost? _host;
         private ILogService? _logService;
 
+        public IHost? AppHost => _host;
+
         protected override void OnStartup(StartupEventArgs e)
         {
             // 必须先调用 base.OnStartup 以加载 App.xaml 中的资源
@@ -45,9 +47,11 @@ namespace WpfDesktop
                     services.AddSingleton<IVersionService, VersionService>();
                     services.AddSingleton<IComfyPathService, ComfyPathService>();
                     services.AddSingleton<IPythonPathService, PythonPathService>();
+                    services.AddSingleton<IProxyService, ProxyService>();
                     services.AddSingleton<IGitService, GitService>();
                     services.AddSingleton<IProcessService, ProcessService>();
                     services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();
+                    services.AddSingleton<IResourceService, ResourceService>();
 
                     services.AddSingleton<DashboardViewModel>();
                     services.AddSingleton<ConfigurationViewModel>();
@@ -56,6 +60,7 @@ namespace WpfDesktop
                     services.AddSingleton<ProcessMonitorViewModel>();
                     services.AddSingleton<HardwareMonitorViewModel>();
                     services.AddSingleton<SettingsViewModel>();
+                    services.AddSingleton<ResourcesViewModel>();
                     services.AddSingleton<MainViewModel>();
 
                     services.AddSingleton<MainWindow>();

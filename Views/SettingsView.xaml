@@ -74,6 +74,275 @@
             <Border Height="1" Opacity="0.3" Margin="0,0,0,50"
                     Background="#2A2A2A"/>
 
+            <!-- Proxy Section -->
+            <TextBlock Text="网络代理" FontSize="18" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,20"/>
+
+            <StackPanel Margin="0,0,0,25">
+                <CheckBox IsChecked="{Binding Settings.Proxy.Enabled}" Margin="0,0,0,15">
+                    <TextBlock Text="启用代理服务器" FontSize="14" FontWeight="Medium"/>
+                </CheckBox>
+                <TextBlock Text="启用后，ComfyUI、Git、pip 等所有网络操作都将通过代理服务器"
+                           FontSize="12" Opacity="0.5" Margin="0,0,0,15"/>
+
+                <TextBlock Text="代理服务器地址" FontSize="14" FontWeight="Medium" Opacity="0.7" Margin="0,0,0,8"/>
+                <TextBox Text="{Binding Settings.Proxy.Server, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding Settings.Proxy.Enabled}"
+                         Width="350" HorizontalAlignment="Left"
+                         VerticalContentAlignment="Center"/>
+                <TextBlock Text="示例: http://127.0.0.1:7890 或 http://proxy.example.com:8080"
+                           FontSize="12" Opacity="0.5" Margin="0,6,0,15"/>
+
+                <Grid Margin="0,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="40"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="用户名 (可选)" FontSize="14" FontWeight="Medium" Opacity="0.7" Margin="0,0,0,8"/>
+                        <TextBox Text="{Binding Settings.Proxy.Username, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding Settings.Proxy.Enabled}"
+                                 VerticalContentAlignment="Center"/>
+                        <TextBlock Text="代理服务器需要认证时填写"
+                                   FontSize="12" Opacity="0.5" Margin="0,6,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="密码 (可选)" FontSize="14" FontWeight="Medium" Opacity="0.7" Margin="0,0,0,8"/>
+                        <PasswordBox x:Name="ProxyPasswordBox"
+                                     IsEnabled="{Binding Settings.Proxy.Enabled}"
+                                     PasswordChanged="ProxyPasswordBox_OnPasswordChanged"
+                                     VerticalContentAlignment="Center"/>
+                        <TextBlock Text="密码将加密存储"
+                                   FontSize="12" Opacity="0.5" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+
+            <Border Height="1" Opacity="0.3" Margin="0,0,0,50"
+                    Background="#2A2A2A"/>
+
+            <!-- Mirror Settings Section -->
+            <TextBlock Text="镜像加速" FontSize="18" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,20"/>
+
+            <!-- GitHub Mirror -->
+            <StackPanel Margin="0,0,0,30">
+                <CheckBox IsChecked="{Binding Settings.GitHubMirror.Enabled}" Margin="0,0,0,15">
+                    <TextBlock Text="启用 GitHub 镜像站点" FontSize="14" FontWeight="Medium"/>
+                </CheckBox>
+                <TextBlock Text="加速 Git 克隆、自定义节点下载等 GitHub 操作"
+                           FontSize="12" Opacity="0.5" Margin="0,0,0,15"/>
+
+                <TextBlock Text="GitHub 镜像地址" FontSize="14" FontWeight="Medium" Opacity="0.7" Margin="0,0,0,8"/>
+                <TextBox Text="{Binding Settings.GitHubMirror.MirrorUrl, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding Settings.GitHubMirror.Enabled}"
+                         HorizontalAlignment="Stretch"
+                         VerticalContentAlignment="Center"/>
+                
+                <!-- 常用镜像列表 -->
+                <TextBlock Text="常用镜像:" FontSize="12" Opacity="0.5" Margin="0,8,0,6"/>
+                <StackPanel Margin="0,0,0,0">
+                    <!-- 镜像 1 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://ghproxy.com/https://github.com" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="推荐 - 稳定性好" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyGitHubMirror1_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- 镜像 2 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://mirror.ghproxy.com/https://github.com" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="备用镜像" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyGitHubMirror2_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- 镜像 3 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,0" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://gh.api.99988866.xyz/https://github.com" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="备用镜像" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyGitHubMirror3_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- pip Mirror -->
+            <StackPanel Margin="0,0,0,25">
+                <CheckBox IsChecked="{Binding Settings.PipMirror.Enabled}" Margin="0,0,0,15">
+                    <TextBlock Text="启用 pip 镜像源" FontSize="14" FontWeight="Medium"/>
+                </CheckBox>
+                <TextBlock Text="加速 Python 包下载（pip install）"
+                           FontSize="12" Opacity="0.5" Margin="0,0,0,15"/>
+
+                <TextBlock Text="pip 镜像源地址" FontSize="14" FontWeight="Medium" Opacity="0.7" Margin="0,0,0,8"/>
+                <TextBox Text="{Binding Settings.PipMirror.IndexUrl, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding Settings.PipMirror.Enabled}"
+                         HorizontalAlignment="Stretch"
+                         VerticalContentAlignment="Center"/>
+                
+                <!-- 常用镜像源列表 -->
+                <TextBlock Text="常用镜像源:" FontSize="12" Opacity="0.5" Margin="0,8,0,6"/>
+                <StackPanel Margin="0,0,0,15">
+                    <!-- 镜像源 1 - 清华 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://pypi.tuna.tsinghua.edu.cn/simple" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="清华大学 - 推荐" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyPipMirror1_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- 镜像源 2 - 阿里云 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://mirrors.aliyun.com/pypi/simple" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="阿里云" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyPipMirror2_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- 镜像源 3 - 中科大 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://pypi.mirrors.ustc.edu.cn/simple" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="中国科学技术大学" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyPipMirror3_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- 镜像源 4 - 腾讯云 -->
+                    <Border BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,0" Background="#0A0A0A">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="https://mirrors.cloud.tencent.com/pypi/simple" FontSize="12" Foreground="{DynamicResource PrimaryTextBrush}" FontFamily="Consolas"/>
+                                <TextBlock Text="腾讯云" FontSize="11" Opacity="0.5" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Click="CopyPipMirror4_Click"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Padding="8,4"
+                                    ToolTip="复制到剪贴板">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="复制" FontSize="11"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <CheckBox IsChecked="{Binding Settings.PipMirror.TrustedHost}"
+                          IsEnabled="{Binding Settings.PipMirror.Enabled}"
+                          Margin="0,0,0,0">
+                    <TextBlock Text="信任该镜像源（避免 SSL 证书验证问题）" FontSize="13" Opacity="0.8"/>
+                </CheckBox>
+            </StackPanel>
+
+            <Border Height="1" Opacity="0.3" Margin="0,0,0,50"
+                    Background="#2A2A2A"/>
+
             <!-- Storage Section -->
             <TextBlock Text="存储与路径" FontSize="18" FontWeight="SemiBold"
                        Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,20"/>

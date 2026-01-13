@@ -1,0 +1,23 @@
+{
+  "checkpoints": "Stable Diffusion 主模型检查点，包含完整的扩散模型权重，是图像生成的核心模型",
+  "clip": "CLIP 文本编码器模型，用于将文本提示转换为模型可理解的向量表示",
+  "clip_vision": "CLIP 视觉编码器，用于图像理解和视觉引导生成",
+  "configs": "模型配置文件，定义模型架构和参数设置",
+  "controlnet": "ControlNet 控制模型，通过边缘、深度、姿态等条件图像精确控制生成结果",
+  "diffusers": "Diffusers 格式模型，HuggingFace 的扩散模型格式",
+  "diffusion_models": "独立扩散模型（UNET），不包含文本编码器的纯扩散模型",
+  "embeddings": "文本嵌入/Textual Inversion，用于学习特定概念、风格或角色的小型模型",
+  "gligen": "GLIGEN 模型，支持基于边界框的布局控制生成",
+  "hypernetworks": "超网络模型，用于微调和风格化的辅助网络",
+  "ipadapter": "IP-Adapter 模型，通过参考图像引导生成风格和内容",
+  "loras": "LoRA 低秩适应模型，用于学习特定风格、角色或概念的轻量级微调模型",
+  "photomaker": "PhotoMaker 模型，用于人物定制化生成",
+  "style_models": "风格模型，用于图像风格迁移和风格控制",
+  "unet": "UNET 模型，扩散模型的核心去噪网络",
+  "upscale_models": "图像放大模型（如 ESRGAN、RealESRGAN），用于提升图像分辨率",
+  "vae": "变分自编码器，负责图像与潜空间之间的编解码转换",
+  "vae_approx": "近似 VAE 模型，用于快速预览生成效果",
+  "animatediff_models": "AnimateDiff 动画模型，用于生成动态视频内容",
+  "animatediff_motion_lora": "AnimateDiff 运动 LoRA，控制动画运动模式",
+  "text_encoders": "文本编码器模型，用于处理和编码文本提示"
+}

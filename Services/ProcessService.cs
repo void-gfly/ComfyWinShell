@@ -16,6 +16,7 @@ public class ProcessService : IProcessService, IDisposable
 
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IPythonPathService _pythonPathService;
+    private readonly IProxyService _proxyService;
     private readonly HttpClient _httpClient;
     private readonly Timer _heartbeatTimer;
     private Process? _process;
@@ -39,10 +40,14 @@ public class ProcessService : IProcessService, IDisposable
     public event EventHandler<ProcessStatus>? StatusChanged;
     public event EventHandler<string>? OutputReceived;
 
-    public ProcessService(ArgumentBuilder argumentBuilder, IPythonPathService pythonPathService)
+    public ProcessService(
+        ArgumentBuilder argumentBuilder, 
+        IPythonPathService pythonPathService,
+        IProxyService proxyService)
     {
         _argumentBuilder = argumentBuilder;
         _pythonPathService = pythonPathService;
+        _proxyService = proxyService;
         _httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HeartbeatTimeoutMs) };
         _heartbeatTimer = new Timer(OnHeartbeatTick, null, Timeout.Infinite, Timeout.Infinite);
     }
@@ -371,7 +376,7 @@ public class ProcessService : IProcessService, IDisposable
         }
 
         var argsStr = string.IsNullOrWhiteSpace(arguments) ? "" : $" {arguments}";
-        return new ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = pythonPath,
             Arguments = $"-s \"{mainPath}\" --windows-standalone-build{argsStr}",
@@ -383,6 +388,11 @@ public class ProcessService : IProcessService, IDisposable
             StandardErrorEncoding = System.Text.Encoding.UTF8,
             CreateNoWindow = true
         };
+
+        // 配置代理环境变量
+        _proxyService.ConfigureProcessProxy(startInfo);
+
+        return startInfo;
     }
 
 

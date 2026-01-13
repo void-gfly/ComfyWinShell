@@ -56,6 +56,7 @@ public partial class MainViewModel : ViewModelBase
         ProcessMonitorViewModel processMonitorViewModel,
         HardwareMonitorViewModel hardwareMonitorViewModel,
         SettingsViewModel settingsViewModel,
+        ResourcesViewModel resourcesViewModel,
         IProcessService processService,
         IComfyPathService comfyPathService,
         IProfileService profileService,
@@ -78,7 +79,8 @@ public partial class MainViewModel : ViewModelBase
             ["ProfileManager"] = profileManagerViewModel,
             ["ProcessMonitor"] = processMonitorViewModel,
             ["HardwareMonitor"] = hardwareMonitorViewModel,
-            ["Settings"] = settingsViewModel
+            ["Settings"] = settingsViewModel,
+            ["Resources"] = resourcesViewModel
         };
 
         var initialView = _viewModels["Dashboard"];

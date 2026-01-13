@@ -35,6 +35,9 @@
         <DataTemplate DataType="{x:Type viewmodels:SettingsViewModel}">
             <views:SettingsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type viewmodels:ResourcesViewModel}">
+            <views:ResourcesView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -63,6 +66,7 @@
                     <RadioButton Content="配置" Tag="&#xE7C3;" Command="{Binding NavigateCommand}" CommandParameter="ProfileManager" GroupName="NavGroup" Style="{DynamicResource NavRadioButtonStyle}"/>
                     <RadioButton Content="控制台" Tag="&#xE756;" Command="{Binding NavigateCommand}" CommandParameter="ProcessMonitor" GroupName="NavGroup" Style="{DynamicResource NavRadioButtonStyle}"/>
                     <RadioButton Content="监控" Tag="&#xE9D2;" Command="{Binding NavigateCommand}" CommandParameter="HardwareMonitor" GroupName="NavGroup" Style="{DynamicResource NavRadioButtonStyle}"/>
+                    <RadioButton Content="资源" Tag="&#xE8B7;" Command="{Binding NavigateCommand}" CommandParameter="Resources" GroupName="NavGroup" Style="{DynamicResource NavRadioButtonStyle}"/>
                 </StackPanel>
 
                 <!-- Bottom Sidebar -->

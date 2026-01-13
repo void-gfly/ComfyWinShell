@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using Microsoft.Extensions.DependencyInjection;
+using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Views;
 
@@ -14,6 +16,7 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
     private readonly string _gitUrl;
     private readonly string _targetDir;
     private readonly string _workingDir;
+    private readonly IProxyService? _proxyService;
     private Process? _process;
     private CancellationTokenSource? _cts;
 
@@ -62,6 +65,16 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
         _targetDir = targetDir;
         _workingDir = workingDir;
 
+        // 尝试获取 ProxyService（用于 GitHub 镜像和代理配置）
+        try
+        {
+            _proxyService = ((App)Application.Current).AppHost?.Services.GetService<IProxyService>();
+        }
+        catch
+        {
+            // 如果获取失败，忽略（不影响基本功能）
+        }
+
         InitializeComponent();
         DataContext = this;
 
@@ -100,7 +113,15 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
         StatusText = "正在克隆...";
         StatusColor = Brushes.DodgerBlue;
 
-        AppendLog($"$ git clone \"{_gitUrl}\" \"{_targetDir}\"\n");
+        // 转换 GitHub URL 为镜像 URL（如果启用）
+        var actualGitUrl = _proxyService?.ConvertGitHubUrl(_gitUrl) ?? _gitUrl;
+        
+        if (actualGitUrl != _gitUrl)
+        {
+            AppendLog($"[镜像加速] 使用 GitHub 镜像站点\n");
+        }
+
+        AppendLog($"$ git clone \"{actualGitUrl}\" \"{_targetDir}\"\n");
         AppendLog($"工作目录: {_workingDir}\n");
         AppendLog(new string('-', 50) + "\n");
 
@@ -109,13 +130,16 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
         var startInfo = new ProcessStartInfo
         {
             FileName = "git",
-            Arguments = $"clone --progress \"{_gitUrl}\" \"{_targetDir}\"",
+            Arguments = $"clone --progress \"{actualGitUrl}\" \"{_targetDir}\"",
             WorkingDirectory = _workingDir,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+
+        // 配置代理环境变量
+        _proxyService?.ConfigureProcessProxy(startInfo);
 
         try
         {

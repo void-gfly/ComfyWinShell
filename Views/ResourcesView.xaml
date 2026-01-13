@@ -1,0 +1,351 @@
+<UserControl x:Class="WpfDesktop.Views.ResourcesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:WpfDesktop.Converters"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="900">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+    </UserControl.Resources>
+
+    <Grid Margin="20" Background="#050505">
+        <!-- ComfyUI Found - Show Resources -->
+        <Grid Visibility="{Binding IsComfyUiFound, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top Header -->
+            <Border Grid.Row="0"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="#333"
+                    Padding="0,0,0,20"
+                    Margin="0,0,0,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="ComfyUI 路径:"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Width="100"/>
+                            <TextBlock Text="{Binding ComfyUiPath}"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding ComfyUiPath}"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="资源统计:"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Width="100"/>
+                            <TextBlock Foreground="{DynamicResource PrimaryTextBrush}">
+                                <Run Text="{Binding CustomNodesCount, Mode=OneWay}"/>
+                                <Run Text=" 个节点, "/>
+                                <Run Text="{Binding ModelFoldersCount, Mode=OneWay}"/>
+                                <Run Text=" 个模型目录, "/>
+                                <Run Text="{Binding WorkflowsCount, Mode=OneWay}"/>
+                                <Run Text=" 个工作流"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="模型总大小:"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Width="100"/>
+                            <TextBlock Text="{Binding TotalModelSize}"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                        <Button Content="刷新"
+                                Command="{Binding RefreshCommand}"
+                                Style="{DynamicResource SecondaryButtonStyle}"
+                                Width="80"/>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,10,0,0"
+                                   FontSize="12"
+                                   MaxWidth="200"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Right"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Tab Controls -->
+            <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
+                <TabControl.Resources>
+                    <Style TargetType="TabItem">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                        <Setter Property="Padding" Value="15,8"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TabItem">
+                                    <Border Name="Border" BorderThickness="0,0,0,2" BorderBrush="Transparent" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TabControl.Resources>
+
+                <!-- 自定义节点 Tab -->
+                <TabItem Header="自定义节点">
+                    <ListView ItemsSource="{Binding CustomNodes}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              Margin="0,10,0,0">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="节点名称" Width="250">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" 
+                                                       FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                                       ToolTip="{Binding Path}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="Git 仓库" Width="80">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock>
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="否"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsGitRepo}" Value="True">
+                                                                <Setter Property="Text" Value="是"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="远程地址" Width="350">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding GitRemoteUrl}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding GitRemoteUrl}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="操作" Width="80">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Path}"
+                                                    Content="打开"
+                                                    Padding="8,2"
+                                                    FontSize="11"
+                                                    Style="{DynamicResource SecondaryButtonStyle}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </TabItem>
+
+                <!-- 模型 Tab -->
+                <TabItem Header="模型">
+                    <ListView ItemsSource="{Binding ModelFolders}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              Margin="0,10,0,0">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="目录名称" Width="150">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" 
+                                                       FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                                       ToolTip="{Binding Path}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="功能介绍" Width="350">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Description}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Description}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="文件数" Width="70">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FileCountDisplay}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       HorizontalAlignment="Right"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="磁盘占用" Width="100">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding SizeDisplay}" 
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Right"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="操作" Width="60">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Path}"
+                                                    Content="打开"
+                                                    Padding="8,2"
+                                                    FontSize="11"
+                                                    Style="{DynamicResource SecondaryButtonStyle}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </TabItem>
+
+                <!-- 工作流 Tab -->
+                <TabItem Header="工作流">
+                    <ListView ItemsSource="{Binding Workflows}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              Margin="0,10,0,0">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="文件名" Width="300">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" 
+                                                       FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                                       ToolTip="{Binding Path}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="大小" Width="100">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding SizeDisplay}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       HorizontalAlignment="Right"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="修改时间" Width="150">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding LastModified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="操作" Width="80">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Path}"
+                                                    Content="定位"
+                                                    Padding="8,2"
+                                                    FontSize="11"
+                                                    Style="{DynamicResource SecondaryButtonStyle}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </TabItem>
+            </TabControl>
+        </Grid>
+
+        <!-- ComfyUI Not Found - Show Guidance -->
+        <Grid Visibility="{Binding IsComfyUiFound, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Warning Icon and Title -->
+            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,40,0,30">
+                <TextBlock Text="⚠️" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+                <TextBlock Text="未找到 ComfyUI"
+                           FontSize="24"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Guidance Message -->
+            <Border Grid.Row="1"
+                    Background="#111"
+                    CornerRadius="8"
+                    Padding="30"
+                    Margin="50,0"
+                    VerticalAlignment="Top">
+                <TextBlock Text="{Binding NotFoundMessage}"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           FontFamily="Consolas"
+                           FontSize="13"
+                           LineHeight="22"
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <!-- Refresh Button -->
+            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,30">
+                <Button Content="重新检测"
+                        Command="{Binding RefreshCommand}"
+                        Style="{DynamicResource PrimaryButtonStyle}"
+                        Padding="30,12"/>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,15,0,0"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Loading Overlay -->
+        <Grid Background="#AA000000"
+              Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="正在加载资源..." Foreground="White" FontSize="16"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
