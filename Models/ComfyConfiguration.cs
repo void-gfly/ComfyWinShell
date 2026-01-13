@@ -70,6 +70,12 @@ public partial class PathConfiguration : ObservableObject
     [ObservableProperty]
     private ObservableCollection<string> _extraModelPathsConfig = new();
 
+    /// <summary>
+    /// 扩展模型基础目录（用于自动生成 extra_model_paths.yaml）
+    /// </summary>
+    [ObservableProperty]
+    private string? _extraModelBaseDirectory;
+
     [ObservableProperty]
     private string? _outputDirectory;
 

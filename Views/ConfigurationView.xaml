@@ -186,6 +186,18 @@
                             </DockPanel>
                         </StackPanel>
 
+                        <StackPanel Margin="0,0,0,10" ToolTip="扩展模型基础目录。指定后会自动生成 extra_model_paths.yaml，使用标准的 models/ 子目录结构（checkpoints、loras、vae 等）。适用于与其他 ComfyUI 实例或 WebUI 共享模型。">
+                            <TextBlock Text="扩展模型目录 (Extra Models Base)" Style="{StaticResource FieldLabel}"/>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="ExtraModelBase" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
+                                <TextBox Text="{Binding Configuration.Paths.ExtraModelBaseDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                            <TextBlock Text="💡 该目录下应包含 models/checkpoints、models/loras 等标准子目录" 
+                                       Foreground="#888888" 
+                                       FontSize="11" 
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+
                         <StackPanel Margin="0,0,0,10" ToolTip="设置输出目录，用于保存生成的图像。(--output-directory)">
                             <TextBlock Text="输出目录 (Output)" Style="{StaticResource FieldLabel}"/>
                             <DockPanel>
@@ -219,7 +231,7 @@
                         </StackPanel>
 
                         <StackPanel ToolTip="加载额外的模型路径配置文件 (extra_model_paths.yaml)。每行一个路径。(--extra-model-paths-config)">
-                            <TextBlock Text="额外模型路径 (Extra Models)" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="额外配置文件路径 (Advanced)" Style="{StaticResource FieldLabel}"/>
                             <TextBox Text="{Binding ExtraModelPathsText, UpdateSourceTrigger=PropertyChanged}"
                                      AcceptsReturn="True" Height="80" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
                         </StackPanel>
