@@ -53,6 +53,7 @@ namespace WpfDesktop
                     services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();
                     services.AddSingleton<IResourceService, ResourceService>();
                     services.AddSingleton<IEnvironmentCheckService, EnvironmentCheckService>();
+                    services.AddSingleton<IWorkflowAnalyzerService, WorkflowAnalyzerService>();
 
                     services.AddSingleton<DashboardViewModel>();
                     services.AddSingleton<ConfigurationViewModel>();

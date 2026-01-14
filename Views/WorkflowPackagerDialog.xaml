@@ -1,0 +1,247 @@
+<Window x:Class="WpfDesktop.Views.WorkflowPackagerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="工作流打包"
+        Width="700"
+        Height="550"
+        MinWidth="600"
+        MinHeight="450"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="SingleBorderWindow"
+        Background="#1E1E1E">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <TextBlock Grid.Row="0"
+                   Text="工作流打包"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Foreground="#FFB300"
+                   Margin="0,0,0,12"/>
+
+        <!-- 工作流信息 -->
+        <Border Grid.Row="1" 
+                Background="#0D0D0D" 
+                CornerRadius="4" 
+                Padding="12" 
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Foreground="#CCCCCC" FontSize="13">
+                    <Run Text="工作流: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding WorkflowName}" Foreground="White"/>
+                </TextBlock>
+                <TextBlock Foreground="#CCCCCC" FontSize="13" Margin="0,4,0,0">
+                    <Run Text="节点: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding TotalNodeCount}" Foreground="White"/>
+                    <Run Text=" | 模型: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding RequiredModelsCount}" Foreground="White"/>
+                </TextBlock>
+                <TextBlock Foreground="#CCCCCC" FontSize="13" Margin="0,4,0,0">
+                    <Run Text="缺失节点: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding MissingNodeCount}" Foreground="{Binding MissingNodeCountColor}"/>
+                    <Run Text=" | 缺失模型: " FontWeight="SemiBold"/>
+                    <Run Text="{Binding MissingModelCount}" Foreground="{Binding MissingModelCountColor}"/>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- 打包进度区域 -->
+        <Border Grid.Row="2" 
+                Background="#0D0D0D" 
+                CornerRadius="4" 
+                Padding="12" 
+                Margin="0,0,0,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- 目标目录选择 -->
+                    <TextBlock Text="打包目标目录" 
+                               Foreground="#FFB300" 
+                               FontSize="14" 
+                               FontWeight="SemiBold" 
+                               Margin="0,0,0,8"/>
+                    
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBox x:Name="TargetPathTextBox"
+                                 Grid.Column="0"
+                                 Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="#2D2D2D"
+                                 Foreground="White"
+                                 BorderBrush="#555555"
+                                 BorderThickness="1"
+                                 Padding="8"
+                                 FontSize="13"
+                                 VerticalContentAlignment="Center"
+                                 IsReadOnly="True"/>
+                        
+                        <Button Grid.Column="1"
+                                Content="浏览..."
+                                Click="BrowseButton_Click"
+                                Background="#3D3D3D"
+                                Foreground="White"
+                                BorderBrush="#555555"
+                                BorderThickness="1"
+                                Padding="16,8"
+                                Margin="8,0,0,0"
+                                FontSize="13"
+                                Cursor="Hand"/>
+                    </Grid>
+
+                    <!-- 打包进度 -->
+                    <TextBlock Text="打包进度" 
+                               Foreground="#FFB300" 
+                               FontSize="14" 
+                               FontWeight="SemiBold" 
+                               Margin="0,0,0,8"
+                               Visibility="{Binding IsPackaging, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    
+                    <ProgressBar Height="6"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Value="{Binding PackageProgress}"
+                                 Background="#2D2D2D"
+                                 Foreground="#FFB300"
+                                 BorderThickness="0"
+                                 Margin="0,0,0,12"
+                                 Visibility="{Binding IsPackaging, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                    <!-- 日志输出 -->
+                    <TextBlock Text="打包日志" 
+                               Foreground="#FFB300" 
+                               FontSize="14" 
+                               FontWeight="SemiBold" 
+                               Margin="0,0,0,8"/>
+                    
+                    <Border Background="#050505" 
+                            BorderBrush="#555555" 
+                            BorderThickness="1" 
+                            CornerRadius="4" 
+                            Padding="8"
+                            Height="200">
+                        <ScrollViewer x:Name="LogScrollViewer" 
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto">
+                            <TextBlock x:Name="LogTextBlock"
+                                       Text="{Binding LogOutput}"
+                                       Foreground="#CCCCCC"
+                                       FontFamily="Consolas"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"/>
+                        </ScrollViewer>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- 状态栏 -->
+        <TextBlock Grid.Row="3"
+                   Text="{Binding StatusMessage}"
+                   Foreground="#CCCCCC"
+                   FontSize="12"
+                   Margin="0,0,0,12"
+                   TextWrapping="Wrap"/>
+
+        <!-- 按钮区 -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="1"
+                    Content="开始打包"
+                    Click="StartPackageButton_Click"
+                    IsEnabled="{Binding CanStartPackage}"
+                    Background="#FFB300"
+                    Foreground="#050505"
+                    BorderThickness="0"
+                    Padding="24,10"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Cursor="Hand"
+                    Margin="0,0,8,0">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="4"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FFC300"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#555555"/>
+                                <Setter Property="Foreground" Value="#999999"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+
+            <Button Grid.Column="2"
+                    Content="关闭"
+                    Click="CloseButton_Click"
+                    Background="#3D3D3D"
+                    Foreground="White"
+                    BorderBrush="#555555"
+                    BorderThickness="1"
+                    Padding="24,10"
+                    FontSize="14"
+                    Cursor="Hand">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="4"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#4D4D4D"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+    </Grid>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+</Window>

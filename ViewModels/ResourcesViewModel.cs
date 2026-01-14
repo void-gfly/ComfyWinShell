@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
+using WpfDesktop.Views;
 
 namespace WpfDesktop.ViewModels;
 
@@ -13,15 +15,18 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
     private readonly IComfyPathService _comfyPathService;
     private readonly IResourceService _resourceService;
     private readonly ILogService _logService;
+    private readonly IWorkflowAnalyzerService _workflowAnalyzerService;
 
     public ResourcesViewModel(
         IComfyPathService comfyPathService,
         IResourceService resourceService,
-        ILogService logService)
+        ILogService logService,
+        IWorkflowAnalyzerService workflowAnalyzerService)
     {
         _comfyPathService = comfyPathService;
         _resourceService = resourceService;
         _logService = logService;
+        _workflowAnalyzerService = workflowAnalyzerService;
     }
 
     #region Properties
@@ -146,6 +151,36 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         {
             _logService.LogError("打开文件失败", ex);
             StatusMessage = $"打开失败: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void AnalyzeWorkflow(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        {
+            StatusMessage = "工作流文件不存在";
+            return;
+        }
+
+        if (!_workflowAnalyzerService.IsWorkflowFile(filePath))
+        {
+            StatusMessage = "不是有效的工作流文件";
+            return;
+        }
+
+        try
+        {
+            var dialog = new WorkflowAnalyzerDialog(_workflowAnalyzerService, filePath)
+            {
+                Owner = Application.Current.MainWindow
+            };
+            dialog.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("打开工作流分析器失败", ex);
+            StatusMessage = $"分析失败: {ex.Message}";
         }
     }
 

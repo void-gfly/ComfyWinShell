@@ -275,15 +275,24 @@
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
-                                <GridViewColumn Header="操作" Width="80">
+                                <GridViewColumn Header="操作" Width="140">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <Button Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding Path}"
-                                                    Content="定位"
-                                                    Padding="8,2"
-                                                    FontSize="11"
-                                                    Style="{DynamicResource SecondaryButtonStyle}"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding Path}"
+                                                        Content="定位"
+                                                        Padding="8,2"
+                                                        FontSize="11"
+                                                        Margin="0,0,4,0"
+                                                        Style="{DynamicResource SecondaryButtonStyle}"/>
+                                                <Button Command="{Binding DataContext.AnalyzeWorkflowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding Path}"
+                                                        Content="分析"
+                                                        Padding="8,2"
+                                                        FontSize="11"
+                                                        Style="{DynamicResource PrimaryButtonStyle}"/>
+                                            </StackPanel>
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
