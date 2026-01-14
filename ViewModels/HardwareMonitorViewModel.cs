@@ -54,12 +54,14 @@ public partial class GpuDisplayInfo : ObservableObject
 public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 {
     private readonly IHardwareMonitorService _hardwareMonitorService;
+    private readonly ILogService _logService;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
 
-    public HardwareMonitorViewModel(IHardwareMonitorService hardwareMonitorService)
+    public HardwareMonitorViewModel(IHardwareMonitorService hardwareMonitorService, ILogService logService)
     {
         _hardwareMonitorService = hardwareMonitorService;
+        _logService = logService;
 
         RefreshCommand = new RelayCommand(Refresh);
 
@@ -154,9 +156,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(MemoryText));
             OnPropertyChanged(nameof(MemoryPercent));
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略刷新错误
+            _logService.LogError("刷新硬件监控数据失败", ex);
         }
     }
 

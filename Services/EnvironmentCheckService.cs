@@ -294,9 +294,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略 PyTorch CUDA 检测失败
+            _logService.LogError("PyTorch CUDA 检测异常", ex);
         }
     }
 
@@ -426,7 +426,7 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 运行命令行工具
     /// </summary>
-    private static async Task<(int exitCode, string output)> RunCommandAsync(
+    private async Task<(int exitCode, string output)> RunCommandAsync(
         string command, 
         string arguments, 
         CancellationToken cancellationToken,
@@ -483,9 +483,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
             {
                 process.Kill(true);
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略终止进程失败
+                _logService.LogError("终止超时进程失败", ex);
             }
             return (-1, $"命令执行超时（{timeoutSeconds}秒）");
         }

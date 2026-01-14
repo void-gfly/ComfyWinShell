@@ -1,14 +1,29 @@
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Extensions.DependencyInjection;
+using WpfDesktop.Services.Interfaces;
 using WpfDesktop.ViewModels;
 
 namespace WpfDesktop.Views;
 
 public partial class SettingsView : UserControl
 {
+    private readonly ILogService? _logService;
+
     public SettingsView()
     {
         InitializeComponent();
+        
+        // 尝试获取 LogService
+        try
+        {
+            _logService = ((App)Application.Current).AppHost?.Services.GetService<ILogService>();
+        }
+        catch
+        {
+            // 获取失败时继续运行
+        }
+        
         Loaded += OnLoaded;
     }
 
@@ -106,9 +121,9 @@ public partial class SettingsView : UserControl
                 timer.Start();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略复制失败的错误
+            _logService?.LogError($"复制到剪贴板失败: {text}", ex);
         }
     }
 }

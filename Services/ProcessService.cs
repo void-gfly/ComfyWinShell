@@ -17,6 +17,7 @@ public class ProcessService : IProcessService, IDisposable
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IPythonPathService _pythonPathService;
     private readonly IProxyService _proxyService;
+    private readonly ILogService _logService;
     private readonly HttpClient _httpClient;
     private readonly Timer _heartbeatTimer;
     private Process? _process;
@@ -43,11 +44,13 @@ public class ProcessService : IProcessService, IDisposable
     public ProcessService(
         ArgumentBuilder argumentBuilder, 
         IPythonPathService pythonPathService,
-        IProxyService proxyService)
+        IProxyService proxyService,
+        ILogService logService)
     {
         _argumentBuilder = argumentBuilder;
         _pythonPathService = pythonPathService;
         _proxyService = proxyService;
+        _logService = logService;
         _httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HeartbeatTimeoutMs) };
         _heartbeatTimer = new Timer(OnHeartbeatTick, null, Timeout.Infinite, Timeout.Infinite);
     }
@@ -319,8 +322,14 @@ public class ProcessService : IProcessService, IDisposable
             using var response = await _httpClient.GetAsync(_comfyApiUrl);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (HttpRequestException ex)
         {
+            _logService.LogError($"心跳检测 HTTP 请求失败: {_comfyApiUrl}", ex);
+            return false;
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logService.LogError($"心跳检测超时: {_comfyApiUrl}", ex);
             return false;
         }
     }

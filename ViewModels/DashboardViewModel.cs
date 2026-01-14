@@ -15,19 +15,22 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
     private readonly IConfigurationService _configurationService;
     private readonly IPythonPathService _pythonPathService;
     private readonly ArgumentBuilder _argumentBuilder;
+    private readonly ILogService _logService;
 
     public DashboardViewModel(
         IComfyPathService comfyPathService,
         IProfileService profileService,
         IConfigurationService configurationService,
         IPythonPathService pythonPathService,
-        ArgumentBuilder argumentBuilder)
+        ArgumentBuilder argumentBuilder,
+        ILogService logService)
     {
         _comfyPathService = comfyPathService;
         _profileService = profileService;
         _configurationService = configurationService;
         _pythonPathService = pythonPathService;
         _argumentBuilder = argumentBuilder;
+        _logService = logService;
 
         // 构造函数中不再自动刷新，由导航事件触发
     }
@@ -145,10 +148,10 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
             {
                 Directory.CreateDirectory(path);
             }
-            catch
+            catch (Exception ex)
             {
-                // Verify existence again or fail silently if creation failed
-                if (!Directory.Exists(path)) return;
+                _logService.LogError($"创建目录失败: {path}", ex);
+                return;
             }
         }
 
@@ -156,9 +159,9 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
         {
             System.Diagnostics.Process.Start("explorer.exe", path);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors opening explorer
+            _logService.LogError($"打开资源管理器失败: {path}", ex);
         }
     }
 

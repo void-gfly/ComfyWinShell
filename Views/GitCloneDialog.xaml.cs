@@ -17,6 +17,7 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
     private readonly string _targetDir;
     private readonly string _workingDir;
     private readonly IProxyService? _proxyService;
+    private readonly ILogService? _logService;
     private Process? _process;
     private CancellationTokenSource? _cts;
 
@@ -69,10 +70,11 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
         try
         {
             _proxyService = ((App)Application.Current).AppHost?.Services.GetService<IProxyService>();
+            _logService = ((App)Application.Current).AppHost?.Services.GetService<ILogService>();
         }
-        catch
+        catch (Exception ex)
         {
-            // 如果获取失败，忽略（不影响基本功能）
+            _logService?.LogError("获取服务失败", ex);
         }
 
         InitializeComponent();
@@ -232,9 +234,9 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
                 _process.Kill(entireProcessTree: true);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略取消时的异常
+            _logService?.LogError("取消 Git 克隆操作失败", ex);
         }
     }
 

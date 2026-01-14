@@ -11,14 +11,16 @@ namespace WpfDesktop.Services;
 public class ResourceService : IResourceService
 {
     private readonly IComfyPathService _comfyPathService;
+    private readonly ILogService _logService;
     private static readonly string DescriptionsFilePath = Path.Combine(AppContext.BaseDirectory, "Resources", "model_descriptions.json");
 
     // 缓存模型描述
     private IReadOnlyDictionary<string, string>? _modelDescriptionsCache;
 
-    public ResourceService(IComfyPathService comfyPathService)
+    public ResourceService(IComfyPathService comfyPathService, ILogService logService)
     {
         _comfyPathService = comfyPathService;
+        _logService = logService;
     }
 
     public async Task<IReadOnlyList<CustomNodeInfo>> GetCustomNodesAsync()
@@ -164,22 +166,30 @@ public class ResourceService : IResourceService
                             fileCount++;
                         }
                     }
-                    catch
+                    catch (UnauthorizedAccessException ex)
                     {
-                        // 忽略无法访问的文件
+                        _logService.LogError($"无权访问文件: {file}", ex);
+                    }
+                    catch (IOException ex)
+                    {
+                        _logService.LogError($"文件读取错误: {file}", ex);
                     }
                 }
             }
-            catch
+            catch (UnauthorizedAccessException ex)
             {
-                // 忽略无法访问的目录
+                _logService.LogError($"无权访问目录: {folderPath}", ex);
+            }
+            catch (IOException ex)
+            {
+                _logService.LogError($"目录访问错误: {folderPath}", ex);
             }
 
             return (totalSize, fileCount);
         });
     }
 
-    private static string? TryGetGitRemoteUrl(string repoPath)
+    private string? TryGetGitRemoteUrl(string repoPath)
     {
         try
         {
@@ -210,9 +220,9 @@ public class ResourceService : IResourceService
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略解析错误
+            _logService.LogError($"解析 Git 配置失败: {repoPath}", ex);
         }
 
         return null;
@@ -243,9 +253,9 @@ public class ResourceService : IResourceService
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略解析错误，返回空字典
+                _logService.LogError($"加载模型描述文件失败: {DescriptionsFilePath}", ex);
             }
 
             _modelDescriptionsCache = descriptions;

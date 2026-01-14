@@ -24,6 +24,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     private readonly IHardwareMonitorService _hardwareMonitorService;
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IDialogService _dialogService;
+    private readonly ILogService _logService;
     private readonly List<INotifyPropertyChanged> _trackedNotifiers = new();
     private readonly List<INotifyCollectionChanged> _trackedCollections = new();
     private bool _isSyncingText;
@@ -36,7 +37,8 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         IProfileService profileService,
         IHardwareMonitorService hardwareMonitorService,
         ArgumentBuilder argumentBuilder,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        ILogService logService)
     {
         _configurationService = configurationService;
         _comfyPathService = comfyPathService;
@@ -44,6 +46,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         _hardwareMonitorService = hardwareMonitorService;
         _argumentBuilder = argumentBuilder;
         _dialogService = dialogService;
+        _logService = logService;
 
         LoadDefaultCommand = new AsyncRelayCommand(LoadDefaultAsync);
         SaveDefaultCommand = new AsyncRelayCommand(SaveDefaultAsync, () => !IsLoading);
@@ -349,9 +352,9 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
                 CudaDevices.Add(CudaDeviceOption.Create(i, nvidiaGpus[i].Name));
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 硬件监控失败时保留"未选择"选项
+            _logService.LogError("刷新 CUDA 设备列表失败", ex);
         }
     }
 
@@ -465,9 +468,9 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
                     {
                         File.Delete(yamlPath);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // 忽略删除失败
+                        _logService.LogError($"删除 extra_model_paths.yaml 失败: {yamlPath}", ex);
                     }
                 }
             }

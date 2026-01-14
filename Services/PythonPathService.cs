@@ -8,11 +8,13 @@ namespace WpfDesktop.Services;
 public class PythonPathService : IPythonPathService
 {
     private readonly AppSettings _appSettings;
+    private readonly ILogService _logService;
     private string? _pythonPath;
 
-    public PythonPathService(AppSettings appSettings)
+    public PythonPathService(AppSettings appSettings, ILogService logService)
     {
         _appSettings = appSettings;
+        _logService = logService;
     }
 
     public string? PythonPath => _pythonPath;
@@ -47,7 +49,7 @@ public class PythonPathService : IPythonPathService
         }
     }
 
-    private static string? SearchPython(string rootPath)
+    private string? SearchPython(string rootPath)
     {
         if (string.IsNullOrWhiteSpace(rootPath))
         {
@@ -77,9 +79,13 @@ public class PythonPathService : IPythonPathService
                 }
             }
         }
-        catch
+        catch (UnauthorizedAccessException ex)
         {
-            // 忽略目录枚举错误
+            _logService.LogError($"无权访问目录: {rootPath}", ex);
+        }
+        catch (IOException ex)
+        {
+            _logService.LogError($"目录枚举错误: {rootPath}", ex);
         }
 
         // 3. 根目录下的 python.exe
@@ -104,9 +110,9 @@ public class PythonPathService : IPythonPathService
             });
             File.WriteAllText(settingsPath, json);
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略保存错误
+            _logService.LogError($"保存配置文件失败: appsettings.json", ex);
         }
     }
 }

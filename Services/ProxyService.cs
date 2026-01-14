@@ -11,10 +11,12 @@ namespace WpfDesktop.Services;
 public class ProxyService : IProxyService
 {
     private readonly IOptionsMonitor<AppSettings> _settingsMonitor;
+    private readonly ILogService _logService;
 
-    public ProxyService(IOptionsMonitor<AppSettings> settingsMonitor)
+    public ProxyService(IOptionsMonitor<AppSettings> settingsMonitor, ILogService logService)
     {
         _settingsMonitor = settingsMonitor;
+        _logService = logService;
     }
 
     public bool IsEnabled => _settingsMonitor.CurrentValue.Proxy.Enabled;
@@ -99,9 +101,9 @@ public class ProxyService : IProxyService
                 var uri = new Uri(pip.IndexUrl);
                 args += $" --trusted-host {uri.Host}";
             }
-            catch
+            catch (UriFormatException ex)
             {
-                // 如果 URL 解析失败，忽略 trusted-host 参数
+                _logService.LogError($"pip 镜像 URL 格式错误: {pip.IndexUrl}", ex);
             }
         }
 
@@ -158,9 +160,9 @@ public class ProxyService : IProxyService
                     var uri = new Uri(pip.IndexUrl);
                     startInfo.Environment["PIP_TRUSTED_HOST"] = uri.Host;
                 }
-                catch
+                catch (UriFormatException ex)
                 {
-                    // 忽略解析错误
+                    _logService.LogError($"pip 镜像 URL 格式错误: {pip.IndexUrl}", ex);
                 }
             }
         }

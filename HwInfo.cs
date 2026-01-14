@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using LibreHardwareMonitor.Hardware;
+using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services
 {
@@ -30,10 +31,12 @@ namespace WpfDesktop.Services
         private readonly Computer _computer;
         private readonly UpdateVisitor _visitor = new UpdateVisitor();
         private readonly bool _available;
+        private readonly ILogService? _logService;
         private bool _disposed;
 
-        public HwInfo()
+        public HwInfo(ILogService? logService = null)
         {
+            _logService = logService;
             _computer = new Computer
             {
                 IsCpuEnabled = true,
@@ -47,8 +50,9 @@ namespace WpfDesktop.Services
                 _computer.Open();
                 _available = true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logService?.LogError("初始化硬件监控库失败", ex);
                 _available = false;
             }
         }
@@ -179,7 +183,7 @@ namespace WpfDesktop.Services
                    || hardware.HardwareType == HardwareType.GpuIntel;
         }
 
-        private static double? SelectLoad(IEnumerable<ISensor> sensors, params string[] preferredTokens)
+        private double? SelectLoad(IEnumerable<ISensor> sensors, params string[] preferredTokens)
         {
             var loadSensors = sensors.Where(s => s.SensorType == SensorType.Load).ToList();
             var preferred = FindByName(loadSensors, preferredTokens);
@@ -197,7 +201,7 @@ namespace WpfDesktop.Services
             return values.Average();
         }
 
-        private static double? SelectTemperature(IEnumerable<ISensor> sensors)
+        private double? SelectTemperature(IEnumerable<ISensor> sensors)
         {
             var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
             var preferred = FindByName(tempSensors, "package", "tctl", "tdie", "core", "gpu");
@@ -215,7 +219,7 @@ namespace WpfDesktop.Services
             return values.Max();
         }
 
-        private static double? SelectFanRpm(IEnumerable<ISensor> sensors, params string[] preferredTokens)
+        private double? SelectFanRpm(IEnumerable<ISensor> sensors, params string[] preferredTokens)
         {
             var fanSensors = sensors.Where(s => s.SensorType == SensorType.Fan).ToList();
             var preferred = FindByName(fanSensors, preferredTokens);
@@ -233,7 +237,7 @@ namespace WpfDesktop.Services
             return values.Max();
         }
 
-        private static (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors)
+        private (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors)
         {
             // 扩展传感器名称匹配范围，提高兼容性
             var used = FindDataValue(sensors, 
@@ -287,17 +291,17 @@ namespace WpfDesktop.Services
         /// <summary>
         /// 查找 Load 类型传感器的值
         /// </summary>
-        private static double? FindLoadValue(IEnumerable<ISensor> sensors, params string[] nameTokens)
+        private double? FindLoadValue(IEnumerable<ISensor> sensors, params string[] nameTokens)
         {
             var loadSensors = sensors.Where(s => s.SensorType == SensorType.Load).ToList();
             var sensor = FindByName(loadSensors, nameTokens);
             return sensor?.Value;
         }
 
-        /// <summary>
-        /// 使用 Windows API 获取系统内存信息（回退方案）
-        /// </summary>
-        private static (double? used, double? total) GetMemoryFromWindowsAPI()
+    /// <summary>
+    /// 使用 Windows API 获取系统内存信息（回退方案）
+    /// </summary>
+    private (double? used, double? total) GetMemoryFromWindowsAPI()
         {
             try
             {
@@ -312,12 +316,12 @@ namespace WpfDesktop.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[HwInfo] Windows API memory query failed: {ex.Message}");
+                _logService?.LogError("内存状态 API 调用失败", ex);
             }
             return (null, null);
         }
 
-        private static (double? used, double? total) NormalizeMemoryValues(double? used, double? total)
+        private (double? used, double? total) NormalizeMemoryValues(double? used, double? total)
         {
             if (!used.HasValue || !total.HasValue || total.Value <= 0)
             {
@@ -340,14 +344,14 @@ namespace WpfDesktop.Services
             return (usedValue, totalValue);
         }
 
-        private static double? FindDataValue(IEnumerable<ISensor> sensors, params string[] nameTokens)
+        private double? FindDataValue(IEnumerable<ISensor> sensors, params string[] nameTokens)
         {
             var dataSensors = sensors.Where(s => s.SensorType == SensorType.Data || s.SensorType == SensorType.SmallData).ToList();
             var sensor = FindByName(dataSensors, nameTokens);
             return sensor?.Value;
         }
 
-        private static ISensor? FindByName(IEnumerable<ISensor> sensors, params string[] nameTokens)
+        private ISensor? FindByName(IEnumerable<ISensor> sensors, params string[] nameTokens)
         {
             foreach (var sensor in sensors)
             {

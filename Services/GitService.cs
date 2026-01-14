@@ -10,10 +10,12 @@ namespace WpfDesktop.Services;
 public class GitService : IGitService
 {
     private readonly IProxyService _proxyService;
+    private readonly ILogService _logService;
 
-    public GitService(IProxyService proxyService)
+    public GitService(IProxyService proxyService, ILogService logService)
     {
         _proxyService = proxyService;
+        _logService = logService;
     }
     public async Task<bool> IsGitRepositoryAsync(string path)
     {
@@ -25,8 +27,9 @@ public class GitService : IGitService
             var result = await RunGitCommandAsync(path, "rev-parse --is-inside-work-tree");
             return result.Trim() == "true";
         }
-        catch
+        catch (Exception ex)
         {
+            _logService.LogError($"检测 Git 仓库失败: {path}", ex);
             return false;
         }
     }
@@ -37,8 +40,9 @@ public class GitService : IGitService
         {
             return (await RunGitCommandAsync(path, "remote get-url origin")).Trim();
         }
-        catch
+        catch (Exception ex)
         {
+            _logService.LogError($"获取 Git 远程 URL 失败: {path}", ex);
             return string.Empty;
         }
     }
@@ -55,8 +59,9 @@ public class GitService : IGitService
             // If detached HEAD (e.g. checked out a tag/commit), show the hash or tag
             return "Detached HEAD";
         }
-        catch
+        catch (Exception ex)
         {
+            _logService.LogError($"获取当前分支失败: {path}", ex);
             return "Unknown";
         }
     }
@@ -67,8 +72,9 @@ public class GitService : IGitService
         {
             return (await RunGitCommandAsync(path, "rev-parse HEAD")).Trim();
         }
-        catch
+        catch (Exception ex)
         {
+            _logService.LogError($"获取当前提交哈希失败: {path}", ex);
             return string.Empty;
         }
     }
