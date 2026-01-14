@@ -74,3 +74,8 @@ private string _myProperty;  // 自动生成 MyProperty 属性和 OnMyPropertyCh
 ### 对话框服务
 
 `IDialogService` 提供文件夹选择、文件选择、消息框等功能，避免在 ViewModel 中直接使用 WPF 对话框。
+
+### 文档创建限制
+- **默认禁止**：不要主动创建 README、文档、说明文件
+- **仅当用户明确要求时**才创建文档
+- **完成任务后**仅输出简洁的完成总结（3-5 行），不写长文档

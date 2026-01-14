@@ -1,12 +1,32 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using LibreHardwareMonitor.Hardware;
 
 namespace WpfDesktop.Services
 {
     public sealed class HwInfo : IDisposable
     {
+        // Windows API for memory status fallback
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
         private readonly Computer _computer;
         private readonly UpdateVisitor _visitor = new UpdateVisitor();
         private readonly bool _available;
@@ -215,19 +235,86 @@ namespace WpfDesktop.Services
 
         private static (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors)
         {
-            var used = FindDataValue(sensors, "memory used", "gpu memory used", "vram used", "used memory");
-            var total = FindDataValue(sensors, "memory total", "gpu memory total", "vram total", "total memory");
+            // 扩展传感器名称匹配范围，提高兼容性
+            var used = FindDataValue(sensors, 
+                "memory used", "used", "memory usage", 
+                "ram used", "physical memory used",
+                "gpu memory used", "vram used", "used memory");
+            
+            var total = FindDataValue(sensors, 
+                "memory total", "total", "memory capacity",
+                "ram total", "physical memory total",
+                "gpu memory total", "vram total", "total memory");
 
+            // 如果没有 total，尝试通过 used + available 计算
             if (!total.HasValue)
             {
-                var available = FindDataValue(sensors, "memory available", "free memory");
+                var available = FindDataValue(sensors, 
+                    "memory available", "available", "free", 
+                    "free memory", "available memory");
                 if (used.HasValue && available.HasValue)
                 {
                     total = used.Value + available.Value;
                 }
             }
 
+            // 如果没有 used，尝试通过 total 和 Load% 计算
+            if (!used.HasValue && total.HasValue)
+            {
+                var loadPercent = FindLoadValue(sensors, "memory");
+                if (loadPercent.HasValue)
+                {
+                    used = total.Value * (loadPercent.Value / 100.0);
+                }
+            }
+
+            // 如果传感器检测失败，使用 Windows API 回退
+            if (!used.HasValue || !total.HasValue)
+            {
+                var fallbackResult = GetMemoryFromWindowsAPI();
+                if (fallbackResult.used.HasValue && fallbackResult.total.HasValue)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[HwInfo] Memory sensor fallback to Windows API: " +
+                        $"Used={fallbackResult.used:F1} MB, Total={fallbackResult.total:F1} MB");
+                    return fallbackResult;
+                }
+            }
+
             return NormalizeMemoryValues(used, total);
+        }
+
+        /// <summary>
+        /// 查找 Load 类型传感器的值
+        /// </summary>
+        private static double? FindLoadValue(IEnumerable<ISensor> sensors, params string[] nameTokens)
+        {
+            var loadSensors = sensors.Where(s => s.SensorType == SensorType.Load).ToList();
+            var sensor = FindByName(loadSensors, nameTokens);
+            return sensor?.Value;
+        }
+
+        /// <summary>
+        /// 使用 Windows API 获取系统内存信息（回退方案）
+        /// </summary>
+        private static (double? used, double? total) GetMemoryFromWindowsAPI()
+        {
+            try
+            {
+                var memStatus = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+                if (GlobalMemoryStatusEx(ref memStatus))
+                {
+                    var totalMB = memStatus.ullTotalPhys / (1024.0 * 1024.0);
+                    var availMB = memStatus.ullAvailPhys / (1024.0 * 1024.0);
+                    var usedMB = totalMB - availMB;
+                    return (usedMB, totalMB);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HwInfo] Windows API memory query failed: {ex.Message}");
+            }
+            return (null, null);
         }
 
         private static (double? used, double? total) NormalizeMemoryValues(double? used, double? total)
@@ -240,9 +327,13 @@ namespace WpfDesktop.Services
             var usedValue = used.Value;
             var totalValue = total.Value;
 
-            // LHM 的内存/显存数据可能以 GB 报告，数值通常小于 128
-            if (totalValue <= 128 && usedValue <= 128)
+            // 修复 GB 检测逻辑：
+            // - 如果 total < 1024，很可能是 GB 单位（因为系统内存/显存很少低于 1GB）
+            // - 原来的 128 阈值对于大内存系统（如 128GB+）会误判
+            if (totalValue < 1024 && usedValue < 1024)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[HwInfo] Detected GB units (Total={totalValue} GB), converting to MB");
                 return (usedValue * 1024.0, totalValue * 1024.0);
             }
 

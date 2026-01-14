@@ -4,6 +4,7 @@
              xmlns:local="clr-namespace:WpfDesktop"
              xmlns:viewmodels="clr-namespace:WpfDesktop.ViewModels"
              xmlns:views="clr-namespace:WpfDesktop.Views"
+             xmlns:converters="clr-namespace:WpfDesktop.Converters"
              ThemeMode="Dark">
     <Application.Resources>
         <ResourceDictionary>
@@ -11,6 +12,10 @@
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml"/>
                 <ResourceDictionary Source="Resources/Styles/Controls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Converters -->
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <converters:LogLevelToColorConverter x:Key="LogLevelToColorConverter"/>
 
             <DataTemplate DataType="{x:Type viewmodels:DashboardViewModel}">
                 <views:DashboardView />

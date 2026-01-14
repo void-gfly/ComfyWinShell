@@ -33,9 +33,31 @@
                           VerticalAlignment="Center"
                           Margin="0,0,15,0"/>
 
-                <!-- 清空按钮 -->
+                <!-- 检测环境按钮 -->
+                <Button Command="{Binding CheckEnvironmentCommand}"
+                        Content="检测环境"
+                        Height="32"
+                        Padding="16,0"
+                        IsEnabled="{Binding IsCheckingEnvironment, Converter={StaticResource InverseBooleanConverter}}"
+                        Style="{DynamicResource AccentButtonStyle}"
+                        Margin="0,0,10,0">
+                    <Button.ToolTip>
+                        <TextBlock>
+                            <Run Text="检测 ComfyUI 运行环境"/><LineBreak/>
+                            <Run Text="• Python 版本 (>= 3.10)"/><LineBreak/>
+                            <Run Text="• PyTorch 可用性"/><LineBreak/>
+                            <Run Text="• CUDA/ROCm 支持"/><LineBreak/>
+                            <Run Text="• FFmpeg 可用性"/><LineBreak/>
+                            <Run Text="• Git 可用性"/>
+                        </TextBlock>
+                    </Button.ToolTip>
+                </Button>
+
+                <!-- 清空日志按钮 -->
                 <Button Command="{Binding ClearLogsCommand}"
                         Content="清空日志"
+                        Height="32"
+                        Padding="16,0"
                         Style="{DynamicResource DangerButtonStyle}"/>
             </StackPanel>
         </Grid>
@@ -59,7 +81,8 @@
                 </ListBox.ContextMenu>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}"
+                        <TextBlock Text="{Binding FormattedMessage}"
+                                   Foreground="{Binding Level, Converter={StaticResource LogLevelToColorConverter}}"
                                    TextWrapping="Wrap"
                                    FontFamily="Consolas, Courier New, Monospace"
                                    FontSize="13"

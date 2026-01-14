@@ -15,6 +15,8 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     private readonly IProcessService _processService;
     private readonly ISettingsService _settingsService;
     private readonly ILogService _logService;
+    private readonly IEnvironmentCheckService _environmentCheckService;
+    private readonly IPythonPathService _pythonPathService;
     private int _maxLogLines = 5000;
 
     // tqdm 进度条模式匹配：匹配类似 "  5%|█         | 1/20 [00:10<03:24, 10.77s/it]" 的输出
@@ -25,20 +27,29 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     // 记录最后一条进度行在 _allLogs 中的索引，-1 表示没有
     private int _lastProgressLineIndex = -1;
 
-    public ProcessMonitorViewModel(IProcessService processService, ISettingsService settingsService, ILogService logService)
+    public ProcessMonitorViewModel(
+        IProcessService processService, 
+        ISettingsService settingsService, 
+        ILogService logService,
+        IEnvironmentCheckService environmentCheckService,
+        IPythonPathService pythonPathService)
     {
         _processService = processService;
         _settingsService = settingsService;
         _logService = logService;
+        _environmentCheckService = environmentCheckService;
+        _pythonPathService = pythonPathService;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearLogsCommand = new RelayCommand(ClearLogs);
         CopySelectedLogsCommand = new RelayCommand<IList>(CopySelectedLogs);
         CopyAllLogsCommand = new RelayCommand(CopyAllLogs, () => Logs.Count > 0);
+        CheckEnvironmentCommand = new AsyncRelayCommand(CheckEnvironmentAsync, () => !IsCheckingEnvironment);
 
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
         _logService.LogReceived += OnLogReceived;
+        _logService.LogEntryReceived += OnLogEntryReceived;
 
         _ = InitializeAsync();
     }
@@ -50,9 +61,9 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         await RefreshAsync();
     }
 
-    private readonly List<string> _allLogs = new();
+    private readonly List<LogEntry> _allLogs = new();
 
-    public ObservableCollection<string> Logs { get; } = new();
+    public ObservableCollection<LogEntry> Logs { get; } = new();
 
     [ObservableProperty]
     private ProcessStatus? _status;
@@ -81,6 +92,38 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     public IRelayCommand<IList> CopySelectedLogsCommand { get; }
 
     public IRelayCommand CopyAllLogsCommand { get; }
+
+    public IAsyncRelayCommand CheckEnvironmentCommand { get; }
+
+    [ObservableProperty]
+    private bool _isCheckingEnvironment;
+
+    private async Task CheckEnvironmentAsync()
+    {
+        IsCheckingEnvironment = true;
+        CheckEnvironmentCommand.NotifyCanExecuteChanged();
+
+        try
+        {
+            // 获取当前配置的 Python 路径
+            var pythonPath = _pythonPathService.PythonPath;
+
+            _logService.Log("正在执行环境检测...");
+
+            await _environmentCheckService.CheckAllAsync(pythonPath);
+
+            _logService.Log("环境检测完成。");
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError($"环境检测失败: {ex.Message}");
+        }
+        finally
+        {
+            IsCheckingEnvironment = false;
+            CheckEnvironmentCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     private async Task RefreshAsync()
     {
@@ -116,7 +159,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         if (selectedItems == null || selectedItems.Count == 0)
             return;
 
-        var lines = selectedItems.Cast<string>().ToList();
+        var lines = selectedItems.Cast<LogEntry>().Select(e => e.FormattedMessage).ToList();
         Clipboard.SetText(string.Join(Environment.NewLine, lines));
     }
 
@@ -124,7 +167,8 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     {
         if (Logs.Count > 0)
         {
-            Clipboard.SetText(string.Join(Environment.NewLine, Logs));
+            var lines = Logs.Select(e => e.FormattedMessage);
+            Clipboard.SetText(string.Join(Environment.NewLine, lines));
         }
     }
 
@@ -148,37 +192,54 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
     private void OnOutputReceived(object? sender, string line)
     {
-        AddLogLine(line);
+        // 进程输出默认为普通日志（白色）
+        AddLogEntry(new LogEntry
+        {
+            Message = line,
+            Level = GUILogLevel.Info,
+            Timestamp = DateTime.Now
+        });
     }
 
     private void OnLogReceived(object? sender, string line)
     {
-        AddLogLine(line);
+        // 旧版本日志接收（向后兼容），默认为普通日志
+        AddLogEntry(new LogEntry
+        {
+            Message = line,
+            Level = GUILogLevel.Info,
+            Timestamp = DateTime.Now
+        });
     }
 
-    private void AddLogLine(string line)
+    private void OnLogEntryReceived(object? sender, LogEntry entry)
+    {
+        AddLogEntry(entry);
+    }
+
+    private void AddLogEntry(LogEntry entry)
     {
         RunOnUiThread(() =>
         {
-            var isProgressLine = TqdmProgressPattern.IsMatch(line);
+            var isProgressLine = TqdmProgressPattern.IsMatch(entry.Message);
 
             // 如果是进度行且之前已有进度行，则替换而非添加
             if (isProgressLine && _lastProgressLineIndex >= 0 && _lastProgressLineIndex < _allLogs.Count)
             {
-                var oldProgressLine = _allLogs[_lastProgressLineIndex];
-                _allLogs[_lastProgressLineIndex] = line;
+                var oldProgressEntry = _allLogs[_lastProgressLineIndex];
+                _allLogs[_lastProgressLineIndex] = entry;
 
                 // 同步更新 Logs 中对应的行
-                var logsIndex = FindIndexInLogs(oldProgressLine, _lastProgressLineIndex);
+                var logsIndex = FindIndexInLogs(oldProgressEntry, _lastProgressLineIndex);
                 if (logsIndex >= 0)
                 {
-                    Logs[logsIndex] = line;
+                    Logs[logsIndex] = entry;
                 }
             }
             else
             {
                 // 普通日志或首条进度行：添加新行
-                _allLogs.Add(line);
+                _allLogs.Add(entry);
 
                 if (isProgressLine)
                 {
@@ -209,9 +270,9 @@ public partial class ProcessMonitorViewModel : ViewModelBase
                 }
 
                 if (string.IsNullOrWhiteSpace(FilterText)
-                    || line.Contains(FilterText, StringComparison.OrdinalIgnoreCase))
+                    || entry.Message.Contains(FilterText, StringComparison.OrdinalIgnoreCase))
                 {
-                    Logs.Add(line);
+                    Logs.Add(entry);
                     CopyAllLogsCommand.NotifyCanExecuteChanged();
                 }
             }
@@ -221,7 +282,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     /// <summary>
     /// 在 Logs 集合中查找对应 _allLogs[allLogsIndex] 的行索引
     /// </summary>
-    private int FindIndexInLogs(string targetLine, int allLogsIndex)
+    private int FindIndexInLogs(LogEntry targetEntry, int allLogsIndex)
     {
         // 如果没有过滤，Logs 和 _allLogs 顺序一致（但可能因行数限制有偏移）
         if (string.IsNullOrWhiteSpace(FilterText))
@@ -229,7 +290,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
             // 计算 Logs 中的对应索引
             var offset = _allLogs.Count - Logs.Count;
             var logsIndex = allLogsIndex - offset;
-            if (logsIndex >= 0 && logsIndex < Logs.Count && Logs[logsIndex] == targetLine)
+            if (logsIndex >= 0 && logsIndex < Logs.Count && Logs[logsIndex] == targetEntry)
             {
                 return logsIndex;
             }
@@ -238,7 +299,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         // 有过滤或索引不匹配时，从后向前查找（进度行通常在末尾附近）
         for (var i = Logs.Count - 1; i >= 0; i--)
         {
-            if (Logs[i] == targetLine)
+            if (Logs[i] == targetEntry)
             {
                 return i;
             }
@@ -252,14 +313,26 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         RunOnUiThread(() =>
         {
             Logs.Clear();
-            foreach (var log in _allLogs)
+
+            if (string.IsNullOrWhiteSpace(value))
             {
-                if (string.IsNullOrWhiteSpace(value)
-                    || log.Contains(value, StringComparison.OrdinalIgnoreCase))
+                foreach (var entry in _allLogs)
                 {
-                    Logs.Add(log);
+                    Logs.Add(entry);
                 }
             }
+            else
+            {
+                foreach (var entry in _allLogs)
+                {
+                    if (entry.Message.Contains(value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Logs.Add(entry);
+                    }
+                }
+            }
+
+            CopyAllLogsCommand.NotifyCanExecuteChanged();
         });
     }
 
