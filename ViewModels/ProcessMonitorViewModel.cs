@@ -48,7 +48,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
-        _logService.LogReceived += OnLogReceived;
+        // 只订阅 LogEntryReceived，避免与 LogReceived 重复（两者同时触发）
         _logService.LogEntryReceived += OnLogEntryReceived;
 
         _ = InitializeAsync();
@@ -193,17 +193,6 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     private void OnOutputReceived(object? sender, string line)
     {
         // 进程输出默认为普通日志（白色）
-        AddLogEntry(new LogEntry
-        {
-            Message = line,
-            Level = GUILogLevel.Info,
-            Timestamp = DateTime.Now
-        });
-    }
-
-    private void OnLogReceived(object? sender, string line)
-    {
-        // 旧版本日志接收（向后兼容），默认为普通日志
         AddLogEntry(new LogEntry
         {
             Message = line,

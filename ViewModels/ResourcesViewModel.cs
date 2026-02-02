@@ -175,7 +175,7 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
             {
                 Owner = Application.Current.MainWindow
             };
-            dialog.ShowDialog();
+            dialog.Show();
         }
         catch (Exception ex)
         {

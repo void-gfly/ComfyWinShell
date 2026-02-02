@@ -20,4 +20,9 @@ public interface IWorkflowAnalyzerService
     /// <param name="filePath">文件路径</param>
     /// <returns>是否为工作流文件</returns>
     bool IsWorkflowFile(string filePath);
+
+    /// <summary>
+    /// 清除节点缓存并重新扫描（异步）
+    /// </summary>
+    Task RefreshNodeCacheAsync();
 }

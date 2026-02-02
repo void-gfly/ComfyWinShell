@@ -6,6 +6,7 @@ public interface IProcessService
 {
     event EventHandler<ProcessStatus>? StatusChanged;
     event EventHandler<string>? OutputReceived;
+    event EventHandler<bool>? HeartbeatStatusChanged;
 
     /// <summary>
     /// 启动 ComfyUI 进程

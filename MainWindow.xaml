@@ -184,7 +184,7 @@
                     Background="#0A0A0A">
                 <Grid>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="状态: 就绪" VerticalAlignment="Center" FontSize="12"/>
+                        <TextBlock Text="{Binding StatusBarText}" VerticalAlignment="Center" FontSize="12"/>
                         <!-- Last Log Line -->
                         <TextBlock Text="{Binding LastLogLine}"
                                    Foreground="#808080"

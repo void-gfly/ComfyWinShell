@@ -44,6 +44,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private DateTime? _lastUpdated;
 
+    [ObservableProperty]
+    private string _statusBarText = "状态: 未启动";
+
     public IAsyncRelayCommand ToggleProcessCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
     public IRelayCommand OpenWebPageCommand { get; }
@@ -99,6 +102,7 @@ public partial class MainViewModel : ViewModelBase
 
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
+        _processService.HeartbeatStatusChanged += OnHeartbeatStatusChanged;
         _logService.LogReceived += OnLogReceived;
 
         WeakReferenceMessenger.Default.Register<AppSettingsChangedMessage>(this, (_, message) =>
@@ -251,6 +255,11 @@ public partial class MainViewModel : ViewModelBase
         {
             RunOnUiThread(() => LastLogLine = line.Trim());
         }
+    }
+
+    private void OnHeartbeatStatusChanged(object? sender, bool isAlive)
+    {
+        RunOnUiThread(() => StatusBarText = isAlive ? "状态: 就绪" : "状态: 未启动");
     }
 
     private void UpdateStatus(ProcessStatus? status)

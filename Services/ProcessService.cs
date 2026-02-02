@@ -40,6 +40,7 @@ public class ProcessService : IProcessService, IDisposable
 
     public event EventHandler<ProcessStatus>? StatusChanged;
     public event EventHandler<string>? OutputReceived;
+    public event EventHandler<bool>? HeartbeatStatusChanged;
 
     public ProcessService(
         ArgumentBuilder argumentBuilder, 
@@ -295,6 +296,7 @@ public class ProcessService : IProcessService, IDisposable
         if (isAlive != _lastHeartbeatSuccess)
         {
             _lastHeartbeatSuccess = isAlive;
+            HeartbeatStatusChanged?.Invoke(this, isAlive);
 
             if (isAlive && _status.State != ProcessState.Running)
             {
@@ -327,9 +329,9 @@ public class ProcessService : IProcessService, IDisposable
             _logService.LogError($"心跳检测 HTTP 请求失败: {_comfyApiUrl}", ex);
             return false;
         }
-        catch (TaskCanceledException ex)
+        catch (TaskCanceledException)
         {
-            _logService.LogError($"心跳检测超时: {_comfyApiUrl}", ex);
+            // 心跳超时是正常情况（服务未启动或正在重启），不记录日志避免刷屏
             return false;
         }
     }

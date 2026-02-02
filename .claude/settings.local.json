@@ -17,7 +17,8 @@
       "Bash(dotnet build E:dot_netComfyShellWpfDesktopWpfDesktop.sln)",
       "WebFetch(domain:docs.comfy.org)",
       "Bash(dotnet build E:dot_netComfyShellWpfDesktopWpfDesktop.csproj)",
-      "Bash(dotnet build WpfDesktop.csproj)"
+      "Bash(dotnet build WpfDesktop.csproj)",
+      "Bash(dotnet build:*)"
     ]
   }
 }
