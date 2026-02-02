@@ -14,6 +14,10 @@
         WindowStyle="SingleBorderWindow"
         Background="#1E1E1E">
 
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -240,8 +244,4 @@
             </Button>
         </Grid>
     </Grid>
-
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
-    </Window.Resources>
 </Window>

@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Microsoft.Extensions.DependencyInjection;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -16,6 +17,7 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
 {
     private readonly IWorkflowAnalyzerService _analyzerService;
     private readonly string _workflowPath;
+    private WorkflowAnalysisResult? _analysisResult;
 
     public WorkflowAnalyzerDialog(IWorkflowAnalyzerService analyzerService, string workflowPath)
     {
@@ -109,6 +111,45 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
         Close();
     }
 
+    // 打包按钮点击事件
+    private void PackageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_analysisResult == null)
+        {
+            MessageBox.Show(
+                "分析结果不可用，无法打包！",
+                "错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        // 获取服务
+        var app = (App)Application.Current;
+        var packagerService = app.AppHost?.Services.GetRequiredService<IWorkflowPackagerService>();
+        var logService = app.AppHost?.Services.GetRequiredService<ILogService>();
+
+        if (packagerService == null || logService == null)
+        {
+            MessageBox.Show(
+                "无法获取打包服务！",
+                "错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        // 关闭当前窗口
+        Close();
+
+        // 打开打包窗口
+        var packagerDialog = new WorkflowPackagerDialog(packagerService, logService, _analysisResult)
+        {
+            Owner = Owner
+        };
+        packagerDialog.ShowDialog();
+    }
+
     // 节点右键菜单：复制节点名
     private void CopyNodeName_Click(object sender, RoutedEventArgs e)
     {
@@ -193,6 +234,7 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
         try
         {
             var result = await _analyzerService.AnalyzeWorkflowAsync(_workflowPath);
+            _analysisResult = result; // 保存分析结果
 
             if (result.Success)
             {

@@ -29,6 +29,7 @@
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Resources\model_descriptions.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Resources\scan_nodes.py" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

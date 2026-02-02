@@ -293,6 +293,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <!-- 状态信息 -->
@@ -301,13 +302,22 @@
                        Foreground="#888888" 
                        VerticalAlignment="Center"/>
 
-            <!-- 关闭按钮 -->
+            <!-- 打包按钮 -->
             <Button Grid.Column="1"
+                    Content="打包"
+                    Width="100"
+                    Height="32"
+                    Margin="0,0,8,0"
+                    Click="PackageButton_Click"
+                    Style="{DynamicResource PrimaryButtonStyle}"/>
+
+            <!-- 关闭按钮 -->
+            <Button Grid.Column="2"
                     Content="关闭"
                     Width="100"
                     Height="32"
                     Click="CloseButton_Click"
-                    Style="{DynamicResource PrimaryButtonStyle}"/>
+                    Style="{DynamicResource SecondaryButtonStyle}"/>
         </Grid>
 
         <!-- 加载遮罩 -->
