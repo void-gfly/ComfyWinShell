@@ -15,6 +15,7 @@
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="24"/>
             <Setter Property="Margin" Value="0"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/>
         </Style>
 
         <Style x:Key="SectionExpander" TargetType="Expander">

@@ -290,10 +290,16 @@ public partial class MainViewModel : ViewModelBase
         RunOnUiThread(() => UpdateAppTitle(settings));
     }
 
+    [ObservableProperty]
+    private string _appName = "LAUNCHER";
+
     private void UpdateAppTitle(AppSettings settings)
     {
         var title = string.IsNullOrWhiteSpace(settings.AppName) ? "ComfyShell" : settings.AppName;
-        AppTitle = $"{title}  {VersionName}";
+        AppName = string.IsNullOrWhiteSpace(settings.AppName) ? "LAUNCHER" : settings.AppName;
+        
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        AppTitle = $"{title}  {VersionName} v{version}";
     }
 
     private void OpenWebPage()

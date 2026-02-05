@@ -98,7 +98,7 @@
                     <StackPanel Grid.Column="0" Margin="0,0,30,0" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
                             <TextBlock Text="ComfyUI" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                            <TextBlock Text="LAUNCHER" FontSize="10" FontWeight="SemiBold" Opacity="0.6" Margin="4,0,0,2" VerticalAlignment="Bottom"/>
+                            <TextBlock Text="{Binding AppName}" FontSize="10" FontWeight="SemiBold" Opacity="0.6" Margin="4,0,0,2" VerticalAlignment="Bottom"/>
                         </StackPanel>
                     </StackPanel>
 
