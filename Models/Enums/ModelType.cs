@@ -68,5 +68,60 @@ public enum ModelType
     /// <summary>
     /// Embedding 文本嵌入
     /// </summary>
-    Embedding
+    Embedding,
+
+    /// <summary>
+    /// 文本编码器模型 (如 T5)
+    /// </summary>
+    TextEncoder,
+
+    /// <summary>
+    /// 其他类型
+    /// </summary>
+    Other,
+
+    /// <summary>
+    /// 音频编码器模型
+    /// </summary>
+    AudioEncoder,
+
+    /// <summary>
+    /// 音频分离模型
+    /// </summary>
+    AudioSeparation,
+
+    /// <summary>
+    /// 大语言模型 (LLM)
+    /// </summary>
+    LLM,
+
+    /// <summary>
+    /// 语音合成模型 (TTS)
+    /// </summary>
+    TTS,
+
+    /// <summary>
+    /// 视频插帧模型
+    /// </summary>
+    VideoInterpolation,
+
+    /// <summary>
+    /// SAM 分割模型
+    /// </summary>
+    Sam,
+
+    /// <summary>
+    /// DiT 扩散模型
+    /// </summary>
+    DiT,
+
+    /// <summary>
+    /// Wav2Vec 语音识别模型
+    /// </summary>
+    Wav2Vec,
+
+    /// <summary>
+    /// 模型补丁/ControlNet Union
+    /// </summary>
+    ModelPatch
 }

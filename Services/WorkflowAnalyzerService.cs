@@ -29,6 +29,7 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// </summary>
     private static readonly Dictionary<string, (string ParamName, string ModelDir, ModelType Type, string[] AlternateDirs)> ModelLoaderMapping = new()
     {
+        // === ComfyUI 内置加载器 ===
         ["CheckpointLoaderSimple"] = ("ckpt_name", "checkpoints", ModelType.Checkpoint, Array.Empty<string>()),
         ["CheckpointLoader"] = ("ckpt_name", "checkpoints", ModelType.Checkpoint, Array.Empty<string>()),
         ["LoraLoader"] = ("lora_name", "loras", ModelType.Lora, Array.Empty<string>()),
@@ -45,6 +46,67 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         ["UpscaleModelLoader"] = ("model_name", "upscale_models", ModelType.UpscaleModel, Array.Empty<string>()),
         ["HypernetworkLoader"] = ("hypernetwork_name", "hypernetworks", ModelType.Hypernetwork, Array.Empty<string>()),
         ["GLIGENLoader"] = ("gligen_name", "gligen", ModelType.Gligen, Array.Empty<string>()),
+        ["ModelPatchLoader"] = ("name", "controlnet", ModelType.ModelPatch, Array.Empty<string>()),
+        
+        // === WanVideo 系列 (ComfyUI-WanVideoWrapper) ===
+        ["WanVideoVAELoader"] = ("model_name", "vae", ModelType.Vae, Array.Empty<string>()),
+        ["WanVideoModelLoader"] = ("model", "diffusion_models", ModelType.Unet, new[] { "unet" }),
+        ["WanVideoTextEncodeCached"] = ("model_name", "text_encoders", ModelType.TextEncoder, new[] { "clip" }),
+        ["LoadWanVideoT5TextEncoder"] = ("model_name", "text_encoders", ModelType.TextEncoder, new[] { "clip" }),
+        ["WanVideoLoraSelect"] = ("lora", "loras", ModelType.Lora, Array.Empty<string>()),
+        
+        // === SeC 系列 ===
+        ["SeCModelLoader"] = ("model_file", "SeC", ModelType.Other, Array.Empty<string>()),
+        
+        // === GGUF 格式模型 ===
+        ["CLIPLoaderGGUF"] = ("clip_name", "clip", ModelType.Clip, new[] { "text_encoders" }),
+        ["LoaderGGUF"] = ("unet_name", "unet", ModelType.Unet, new[] { "diffusion_models" }),
+        ["SeedVR2GGUF"] = ("model_name", "diffusion_models", ModelType.DiT, new[] { "unet" }),
+        
+        // === 音频相关模型 ===
+        ["AudioEncoderLoader"] = ("model_name", "audio_encoders", ModelType.AudioEncoder, Array.Empty<string>()),
+        ["MelBandRoFormerModelLoader"] = ("model_name", "audio_sep", ModelType.AudioSeparation, Array.Empty<string>()),
+        
+        // === Wav2Vec 语音识别 ===
+        ["DownloadAndLoadWav2VecModel"] = ("model_name", "wav2vec", ModelType.Wav2Vec, Array.Empty<string>()),
+        ["Wav2VecModelLoader"] = ("model_name", "wav2vec", ModelType.Wav2Vec, Array.Empty<string>()),
+        
+        // === LLM 大语言模型 ===
+        ["llama_cpp_model_loader"] = ("model_name", "llm", ModelType.LLM, new[] { "LLM" }),
+        
+        // === TTS 语音合成 ===
+        ["TDQwen3TTSModelLoader"] = ("model_name", "tts", ModelType.TTS, new[] { "TTS" }),
+        
+        // === 视频插帧模型 ===
+        ["DownloadAndLoadGIMMVFIModel"] = ("model_name", "vfi", ModelType.VideoInterpolation, Array.Empty<string>()),
+        
+        // === NLF 模型 ===
+        ["DownloadAndLoadNLFModel"] = ("model_name", "nlf", ModelType.Other, Array.Empty<string>()),
+        
+        // === SAM 分割模型 ===
+        ["easy sam3ModelLoader"] = ("model_name", "sams", ModelType.Sam, Array.Empty<string>()),
+        
+        // === SeedVR2 系列 ===
+        ["SeedVR2LoadDiTModel"] = ("model_name", "diffusion_models", ModelType.DiT, new[] { "unet" }),
+        ["SeedVR2LoadVAEModel"] = ("vae_name", "vae", ModelType.Vae, Array.Empty<string>()),
+        
+        // === MultiTalk 系列 ===
+        ["MultiTalkModelLoader"] = ("model_name", "multitalk", ModelType.Other, Array.Empty<string>()),
+    };
+
+    /// <summary>
+    /// 常见模型文件扩展名（用于通用模型识别）
+    /// </summary>
+    private static readonly HashSet<string> ModelFileExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".safetensors",  // 主流模型格式
+        ".ckpt",         // Checkpoint 格式
+        ".pt",           // PyTorch 格式
+        ".pth",          // PyTorch 格式
+        ".bin",          // 二进制模型
+        ".gguf",         // GGUF 量化格式
+        ".onnx",         // ONNX 格式
+        ".sft",          // safetensors 简写
     };
 
     /// <summary>
@@ -172,8 +234,8 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
             var nodes = ParseNodes(root, isApiFormat);
             result.TotalNodeCount = nodes.Count;
 
-            // 提取自定义节点
-            result.RequiredNodes = await ExtractCustomNodesAsync(nodes);
+            // 提取节点列表（跳过已安装检查）
+            result.RequiredNodes = ExtractCustomNodesSimple(nodes);
 
             // 提取模型引用
             result.RequiredModels = await ExtractModelsAsync(nodes, isApiFormat);
@@ -300,6 +362,38 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         }
 
         return nodes;
+    }
+
+    /// <summary>
+    /// 提取节点列表（简化版，跳过已安装检查）
+    /// </summary>
+    private List<RequiredCustomNode> ExtractCustomNodesSimple(List<WorkflowNode> nodes)
+    {
+        var nodeTypeCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in nodes)
+        {
+            if (string.IsNullOrEmpty(node.ClassType)) continue;
+
+            if (nodeTypeCount.ContainsKey(node.ClassType))
+                nodeTypeCount[node.ClassType]++;
+            else
+                nodeTypeCount[node.ClassType] = 1;
+        }
+
+        return nodeTypeCount
+            .Select(kvp => new RequiredCustomNode
+            {
+                NodeType = kvp.Key,
+                DisplayName = kvp.Key,
+                UsageCount = kvp.Value,
+                IsBuiltIn = BuiltInNodes.Contains(kvp.Key),
+                Exists = true, // 跳过检查，默认标记为已存在
+                PackageName = BuiltInNodes.Contains(kvp.Key) ? "ComfyUI (内置)" : null
+            })
+            .OrderByDescending(n => n.UsageCount)
+            .ThenBy(n => n.NodeType)
+            .ToList();
     }
 
     /// <summary>
@@ -714,6 +808,21 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         foreach (var node in nodes)
         {
             if (string.IsNullOrEmpty(node.ClassType)) continue;
+            
+            // 特殊处理：WanVideoLoraSelectMulti 有多个 lora 参数
+            if (node.ClassType == "WanVideoLoraSelectMulti")
+            {
+                await ExtractMultiLoraModels(node, models, seenModels, isApiFormat);
+                continue;
+            }
+            
+            // 特殊处理：Lora Loader Stack (rgthree) 有多个 lora 参数
+            if (node.ClassType == "Lora Loader Stack (rgthree)")
+            {
+                await ExtractRgthreeLoraStackModels(node, models, seenModels, isApiFormat);
+                continue;
+            }
+            
             if (!ModelLoaderMapping.TryGetValue(node.ClassType, out var loaderInfo)) continue;
 
             string? modelName = null;
@@ -743,6 +852,7 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
             }
 
             if (string.IsNullOrEmpty(modelName)) continue;
+            if (modelName == "none") continue; // 跳过 "none" 选项
             if (seenModels.Contains(modelName)) continue;
             seenModels.Add(modelName);
 
@@ -760,7 +870,242 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
             models.Add(model);
         }
 
+        // 通用扫描：检测未被映射节点中的模型文件
+        await ExtractModelsFromUnknownNodes(nodes, models, seenModels, isApiFormat);
+
         return models.OrderBy(m => m.ModelType).ThenBy(m => m.ModelName).ToList();
+    }
+
+    /// <summary>
+    /// 从 WanVideoLoraSelectMulti 节点提取多个 LoRA 模型
+    /// </summary>
+    private async Task ExtractMultiLoraModels(WorkflowNode node, List<RequiredModel> models, 
+        HashSet<string> seenModels, bool isApiFormat)
+    {
+        // lora_0 到 lora_4 在 widgets_values 数组中，位置为 0, 2, 4, 6, 8 (每隔一个是 strength)
+        if (!node.WidgetsValues.HasValue) return;
+        
+        var widgetsArray = node.WidgetsValues.Value;
+        if (widgetsArray.ValueKind != JsonValueKind.Array) return;
+        
+        var loraIndices = new[] { 0, 2, 4, 6, 8 }; // lora_0 到 lora_4 的位置
+        
+        foreach (var idx in loraIndices)
+        {
+            if (idx >= widgetsArray.GetArrayLength()) break;
+            
+            var loraValue = widgetsArray[idx];
+            if (loraValue.ValueKind != JsonValueKind.String) continue;
+            
+            var loraName = loraValue.GetString();
+            if (string.IsNullOrEmpty(loraName) || loraName == "none") continue;
+            if (seenModels.Contains(loraName)) continue;
+            
+            seenModels.Add(loraName);
+            
+            var model = new RequiredModel
+            {
+                ModelName = loraName,
+                ModelPath = $"loras/{loraName}",
+                ModelType = ModelType.Lora,
+                LoaderNodeType = node.ClassType ?? "WanVideoLoraSelectMulti"
+            };
+            
+            await Task.Run(() => FindModelFile(model, "loras"));
+            models.Add(model);
+        }
+    }
+
+    /// <summary>
+    /// 从 Lora Loader Stack (rgthree) 节点提取多个 LoRA 模型
+    /// widgets_values 格式: [lora_01, strength_01, lora_02, strength_02, ...]
+    /// </summary>
+    private async Task ExtractRgthreeLoraStackModels(WorkflowNode node, List<RequiredModel> models, 
+        HashSet<string> seenModels, bool isApiFormat)
+    {
+        if (!node.WidgetsValues.HasValue) return;
+        
+        var widgetsArray = node.WidgetsValues.Value;
+        if (widgetsArray.ValueKind != JsonValueKind.Array) return;
+        
+        // lora 名称在偶数位置 (0, 2, 4, 6, ...)，strength 在奇数位置
+        for (int idx = 0; idx < widgetsArray.GetArrayLength(); idx += 2)
+        {
+            var loraValue = widgetsArray[idx];
+            if (loraValue.ValueKind != JsonValueKind.String) continue;
+            
+            var loraName = loraValue.GetString();
+            if (string.IsNullOrEmpty(loraName) || 
+                loraName.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+                loraName.Equals("None", StringComparison.Ordinal)) continue;
+            if (seenModels.Contains(loraName)) continue;
+            
+            seenModels.Add(loraName);
+            
+            var model = new RequiredModel
+            {
+                ModelName = loraName,
+                ModelPath = $"loras/{loraName}",
+                ModelType = ModelType.Lora,
+                LoaderNodeType = "Lora Loader Stack (rgthree)"
+            };
+            
+            await Task.Run(() => FindModelFile(model, "loras"));
+            models.Add(model);
+        }
+    }
+
+    /// <summary>
+    /// 通用模型扫描：遍历未被映射节点的参数，检测常见模型文件扩展名
+    /// </summary>
+    private async Task ExtractModelsFromUnknownNodes(List<WorkflowNode> nodes, List<RequiredModel> models, 
+        HashSet<string> seenModels, bool isApiFormat)
+    {
+        foreach (var node in nodes)
+        {
+            if (string.IsNullOrEmpty(node.ClassType)) continue;
+            
+            // 跳过已知的模型加载器节点（已在主循环中处理）
+            if (ModelLoaderMapping.ContainsKey(node.ClassType)) continue;
+            if (node.ClassType == "WanVideoLoraSelectMulti") continue;
+            if (node.ClassType == "Lora Loader Stack (rgthree)") continue;
+            
+            // 收集节点中所有可能的模型文件名
+            var potentialModels = new List<string>();
+            
+            // 从 inputs 中提取（API 格式）
+            if (node.Inputs.HasValue)
+            {
+                ExtractModelFilesFromJsonElement(node.Inputs.Value, potentialModels);
+            }
+            
+            // 从 widgets_values 中提取（UI 格式）
+            if (node.WidgetsValues.HasValue)
+            {
+                ExtractModelFilesFromJsonElement(node.WidgetsValues.Value, potentialModels);
+            }
+            
+            // 处理找到的模型文件
+            foreach (var modelName in potentialModels)
+            {
+                if (seenModels.Contains(modelName)) continue;
+                seenModels.Add(modelName);
+                
+                var modelType = InferModelTypeFromExtension(modelName);
+                var modelDir = InferModelDirectoryFromType(modelType);
+                
+                var model = new RequiredModel
+                {
+                    ModelName = modelName,
+                    ModelPath = $"{modelDir}/{modelName}",
+                    ModelType = modelType,
+                    LoaderNodeType = node.ClassType + " (通用扫描)"
+                };
+                
+                await Task.Run(() => FindModelFile(model, modelDir));
+                models.Add(model);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 从 JSON 元素中递归提取可能的模型文件名
+    /// </summary>
+    private void ExtractModelFilesFromJsonElement(JsonElement element, List<string> results)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                var value = element.GetString();
+                if (!string.IsNullOrEmpty(value) && IsModelFile(value))
+                {
+                    results.Add(value);
+                }
+                break;
+                
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    ExtractModelFilesFromJsonElement(item, results);
+                }
+                break;
+                
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    ExtractModelFilesFromJsonElement(property.Value, results);
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 判断字符串是否为模型文件名
+    /// </summary>
+    private bool IsModelFile(string value)
+    {
+        // 排除明显不是模型的值
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (value.Length < 5) return false; // 最短: x.pt
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase)) return false;
+        if (value.Equals("None", StringComparison.Ordinal)) return false;
+        
+        // 检查是否有模型文件扩展名
+        var extension = Path.GetExtension(value);
+        if (string.IsNullOrEmpty(extension)) return false;
+        
+        return ModelFileExtensions.Contains(extension);
+    }
+
+    /// <summary>
+    /// 根据文件扩展名推断模型类型
+    /// </summary>
+    private ModelType InferModelTypeFromExtension(string modelName)
+    {
+        var extension = Path.GetExtension(modelName).ToLowerInvariant();
+        var nameLower = modelName.ToLowerInvariant();
+        
+        // 根据文件名特征推断类型
+        if (nameLower.Contains("lora")) return ModelType.Lora;
+        if (nameLower.Contains("vae")) return ModelType.Vae;
+        if (nameLower.Contains("clip")) return ModelType.Clip;
+        if (nameLower.Contains("controlnet")) return ModelType.ControlNet;
+        if (nameLower.Contains("unet")) return ModelType.Unet;
+        if (nameLower.Contains("upscale") || nameLower.Contains("esrgan")) return ModelType.UpscaleModel;
+        if (nameLower.Contains("sam")) return ModelType.Sam;
+        if (nameLower.Contains("tts")) return ModelType.TTS;
+        if (nameLower.Contains("wav2vec")) return ModelType.Wav2Vec;
+        
+        // 根据扩展名推断
+        return extension switch
+        {
+            ".gguf" => ModelType.LLM,
+            ".ckpt" => ModelType.Checkpoint,
+            _ => ModelType.Unknown
+        };
+    }
+
+    /// <summary>
+    /// 根据模型类型推断可能的目录
+    /// </summary>
+    private string InferModelDirectoryFromType(ModelType type)
+    {
+        return type switch
+        {
+            ModelType.Checkpoint => "checkpoints",
+            ModelType.Lora => "loras",
+            ModelType.Vae => "vae",
+            ModelType.ControlNet => "controlnet",
+            ModelType.Clip => "clip",
+            ModelType.ClipVision => "clip_vision",
+            ModelType.Unet => "unet",
+            ModelType.UpscaleModel => "upscale_models",
+            ModelType.Sam => "sams",
+            ModelType.LLM => "llm",
+            ModelType.TTS => "tts",
+            ModelType.Wav2Vec => "wav2vec",
+            _ => "models"  // 默认在 models 根目录搜索
+        };
     }
 
     /// <summary>

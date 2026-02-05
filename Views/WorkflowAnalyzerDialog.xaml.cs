@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -74,18 +75,30 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
         set { _missingModelCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(MissingCountColor)); }
     }
 
-    private int _missingNodeCount;
-    public int MissingNodeCount
-    {
-        get => _missingNodeCount;
-        set { _missingNodeCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(MissingCountColor)); }
-    }
-
     public int RequiredModelsCount => RequiredModels.Count;
 
-    public Brush MissingCountColor => (MissingNodeCount + MissingModelCount) > 0 
+    public Brush MissingCountColor => MissingModelCount > 0 
         ? new SolidColorBrush(Color.FromRgb(220, 53, 69))  // #DC3545 红色
         : new SolidColorBrush(Color.FromRgb(40, 167, 69)); // #28A745 绿色
+
+    /// <summary>
+    /// 已安装模型的总大小（字节）
+    /// </summary>
+    public long InstalledModelsTotalBytes => RequiredModels.Where(m => m.Exists).Sum(m => m.SizeBytes);
+
+    /// <summary>
+    /// 已安装模型总大小的格式化显示（以 GB 为单位）
+    /// </summary>
+    public string InstalledModelsTotalSizeDisplay
+    {
+        get
+        {
+            var totalBytes = InstalledModelsTotalBytes;
+            if (totalBytes == 0) return "0 GB";
+            var gb = totalBytes / (1024.0 * 1024.0 * 1024.0);
+            return $"{gb:F2} GB";
+        }
+    }
 
     private string _statusMessage = "";
     public string StatusMessage
@@ -96,6 +109,7 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
 
     public ObservableCollection<RequiredCustomNode> RequiredNodes { get; } = new();
     public ObservableCollection<RequiredModel> RequiredModels { get; } = new();
+
 
     #endregion
 
@@ -243,7 +257,6 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
                 Format = result.Format;
                 TotalNodeCount = result.TotalNodeCount;
                 MissingModelCount = result.MissingModelCount;
-                MissingNodeCount = result.MissingNodeCount;
 
                 RequiredNodes.Clear();
                 foreach (var node in result.RequiredNodes)
@@ -258,9 +271,11 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
                 }
 
                 OnPropertyChanged(nameof(RequiredModelsCount));
+                OnPropertyChanged(nameof(InstalledModelsTotalBytes));
+                OnPropertyChanged(nameof(InstalledModelsTotalSizeDisplay));
 
                 var customNodeCount = result.RequiredNodes.Count(n => !n.IsBuiltIn);
-                StatusMessage = $"分析完成: {result.RequiredNodes.Count} 个节点类型, {customNodeCount} 个自定义节点, {result.RequiredModels.Count} 个模型依赖";
+                StatusMessage = $"分析完成: {result.RequiredNodes.Count} 种节点 ({customNodeCount} 个自定义), {result.RequiredModels.Count} 个模型依赖";
             }
             else
             {
@@ -315,27 +330,12 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 尝试获取选中的节点
-    /// </summary>
-    private bool TryGetSelectedNode(out RequiredCustomNode node)
-    {
-        node = null!;
-        var listView = FindNodeListView();
-        if (listView?.SelectedItem is RequiredCustomNode selectedNode)
-        {
-            node = selectedNode;
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>
     /// 尝试获取选中的模型
     /// </summary>
     private bool TryGetSelectedModel(out RequiredModel model)
     {
         model = null!;
-        var listView = FindModelListView();
+        var listView = FindName("ModelListView") as System.Windows.Controls.ListView;
         if (listView?.SelectedItem is RequiredModel selectedModel)
         {
             model = selectedModel;
@@ -345,19 +345,18 @@ public partial class WorkflowAnalyzerDialog : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 查找节点 ListView
+    /// 尝试获取选中的节点
     /// </summary>
-    private System.Windows.Controls.ListView? FindNodeListView()
+    private bool TryGetSelectedNode(out RequiredCustomNode node)
     {
-        return FindName("NodeListView") as System.Windows.Controls.ListView;
-    }
-
-    /// <summary>
-    /// 查找模型 ListView
-    /// </summary>
-    private System.Windows.Controls.ListView? FindModelListView()
-    {
-        return FindName("ModelListView") as System.Windows.Controls.ListView;
+        node = null!;
+        var listView = FindName("NodeListView") as System.Windows.Controls.ListView;
+        if (listView?.SelectedItem is RequiredCustomNode selectedNode)
+        {
+            node = selectedNode;
+            return true;
+        }
+        return false;
     }
 
     #endregion

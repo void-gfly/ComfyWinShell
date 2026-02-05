@@ -46,6 +46,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="文件: " Foreground="#888888" Margin="0,0,8,4"/>
@@ -55,7 +56,7 @@
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="格式: " Foreground="#888888" Margin="20,0,8,4"/>
                 <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding Format}" Foreground="#FFB300" FontWeight="SemiBold"/>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="节点数: " Foreground="#888888" Margin="0,0,8,0"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="节点数: " Foreground="#888888" Margin="0,0,8,4"/>
                 <TextBlock Grid.Row="1" Grid.Column="1" Foreground="#CCCCCC">
                     <Run Text="{Binding TotalNodeCount, Mode=OneWay}"/>
                     <Run Text=" 个节点, "/>
@@ -63,12 +64,16 @@
                     <Run Text=" 个模型依赖"/>
                 </TextBlock>
                 
-                <TextBlock Grid.Row="1" Grid.Column="2" Text="缺失: " Foreground="#888888" Margin="20,0,8,0"/>
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="缺失: " Foreground="#888888" Margin="20,0,8,4"/>
                 <TextBlock Grid.Row="1" Grid.Column="3" Foreground="{Binding MissingCountColor}">
-                    <Run Text="{Binding MissingNodeCount, Mode=OneWay}"/>
-                    <Run Text=" 个节点, "/>
                     <Run Text="{Binding MissingModelCount, Mode=OneWay}"/>
                     <Run Text=" 个模型"/>
+                </TextBlock>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="已安装: " Foreground="#888888" Margin="0,0,8,0"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Foreground="#28A745" FontWeight="SemiBold">
+                    <Run Text="模型总大小 "/>
+                    <Run Text="{Binding InstalledModelsTotalSizeDisplay, Mode=OneWay}"/>
                 </TextBlock>
             </Grid>
         </Border>
@@ -101,8 +106,8 @@
                 </Style>
             </TabControl.Resources>
 
-            <!-- 节点依赖 Tab -->
-            <TabItem Header="节点依赖">
+            <!-- 节点列表 Tab -->
+            <TabItem Header="节点列表">
                 <ListView x:Name="NodeListView"
                           ItemsSource="{Binding RequiredNodes}"
                           BorderThickness="0"
@@ -124,7 +129,7 @@
                     </ListView.ContextMenu>
                     <ListView.View>
                         <GridView>
-                            <GridViewColumn Header="节点类型" Width="220">
+                            <GridViewColumn Header="节点类型" Width="300">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding NodeType}" 
@@ -143,7 +148,7 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="类型" Width="80">
+                            <GridViewColumn Header="类型" Width="100">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock>
@@ -160,34 +165,6 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="状态" Width="80">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding StatusDisplay}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="#28A745"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Exists}" Value="False">
-                                                            <Setter Property="Foreground" Value="#DC3545"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="所属包" Width="200">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding PackageName}" 
-                                                   Foreground="#666666"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding PackageName}"/>
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
