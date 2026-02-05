@@ -22,7 +22,7 @@ public class VersionService : IVersionService
 
     public VersionService(IOptions<AppSettings> settings)
     {
-        var dataRoot = Environment.ExpandEnvironmentVariables(settings.Value.DataRoot);
+        var dataRoot = PathHelper.ResolveDataRoot(settings.Value.DataRoot);
         _versionsRoot = Path.Combine(dataRoot, "versions");
         _versionsFilePath = Path.Combine(dataRoot, "versions.json");
         Directory.CreateDirectory(_versionsRoot);

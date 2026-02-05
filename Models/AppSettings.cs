@@ -10,7 +10,7 @@ public class AppSettings
     /// <summary>
     /// 数据存储根目录
     /// </summary>
-    public string DataRoot { get; set; } = "%LOCALAPPDATA%\\ComfyShell";
+    public string DataRoot { get; set; } = "data";
 
     /// <summary>
     /// 应用程序名称

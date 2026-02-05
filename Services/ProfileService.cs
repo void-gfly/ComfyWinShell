@@ -21,7 +21,7 @@ public class ProfileService : IProfileService
 
     public ProfileService(IOptions<AppSettings> settings)
     {
-        var dataRoot = Environment.ExpandEnvironmentVariables(settings.Value.DataRoot);
+        var dataRoot = PathHelper.ResolveDataRoot(settings.Value.DataRoot);
         _profilesDirectory = Path.Combine(dataRoot, "profiles");
         Directory.CreateDirectory(_profilesDirectory);
     }

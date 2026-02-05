@@ -21,7 +21,7 @@ public class SettingsService : ISettingsService
     public SettingsService(AppSettings settings)
     {
         _current = settings;
-        var dataRoot = Environment.ExpandEnvironmentVariables(settings.DataRoot);
+        var dataRoot = PathHelper.ResolveDataRoot(settings.DataRoot);
         Directory.CreateDirectory(dataRoot);
         _settingsFilePath = Path.Combine(dataRoot, "settings.json");
     }
