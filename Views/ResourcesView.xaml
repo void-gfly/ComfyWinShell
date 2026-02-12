@@ -51,6 +51,8 @@
                                 <Run Text=" 个节点, "/>
                                 <Run Text="{Binding ModelFoldersCount, Mode=OneWay}"/>
                                 <Run Text=" 个模型目录, "/>
+                                <Run Text="{Binding ExtraModelFoldersCount, Mode=OneWay}"/>
+                                <Run Text=" 个扩展模型目录, "/>
                                 <Run Text="{Binding WorkflowsCount, Mode=OneWay}"/>
                                 <Run Text=" 个工作流"/>
                             </TextBlock>
@@ -61,6 +63,15 @@
                                        Foreground="{DynamicResource SecondaryTextBrush}"
                                        Width="100"/>
                             <TextBlock Text="{Binding TotalModelSize}"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBlock Text="扩展模型总大小:"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Width="100"/>
+                            <TextBlock Text="{Binding TotalExtraModelSize}"
                                        Foreground="{DynamicResource AccentBrush}"
                                        FontWeight="SemiBold"/>
                         </StackPanel>
@@ -179,6 +190,70 @@
                 <!-- 模型 Tab -->
                 <TabItem Header="模型">
                     <ListView ItemsSource="{Binding ModelFolders}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              Margin="0,10,0,0">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="目录名称" Width="150">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" 
+                                                       FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                                       ToolTip="{Binding Path}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="功能介绍" Width="350">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Description}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Description}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="文件数" Width="70">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FileCountDisplay}" 
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       HorizontalAlignment="Right"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="磁盘占用" Width="100">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding SizeDisplay}" 
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Right"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="操作" Width="60">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Path}"
+                                                    Content="打开"
+                                                    Padding="8,2"
+                                                    FontSize="11"
+                                                    Style="{DynamicResource SecondaryButtonStyle}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </TabItem>
+
+                <!-- 扩展模型 Tab -->
+                <TabItem Header="扩展模型">
+                    <ListView ItemsSource="{Binding ExtraModelFolders}"
                               BorderThickness="0"
                               Background="Transparent"
                               Margin="0,10,0,0">

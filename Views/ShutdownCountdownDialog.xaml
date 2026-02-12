@@ -4,25 +4,31 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="System Action"
-        Width="360"
+        Title="正在处理退出"
+        Width="420"
         SizeToContent="Height"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         WindowStyle="ToolWindow"
         Topmost="True"
         ShowInTaskbar="False"
-        Background="White">
+        Background="{StaticResource WindowBackgroundBrush}">
 
     <Grid>
-        <StackPanel Margin="32" VerticalAlignment="Center">
+        <Border Margin="12"
+                Padding="12"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+            <StackPanel VerticalAlignment="Center">
             <TextBlock Text="{Binding StatusText}"
                        TextAlignment="Center"
                        TextWrapping="Wrap"
                        FontSize="16"
                        FontFamily="Segoe UI"
-                       Foreground="#2C3E50"
-                       Margin="0,0,0,20"/>
+                       Foreground="{StaticResource TextBrush}"
+                       Margin="0,0,0,12"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Text="{Binding RemainingSeconds}"
@@ -35,10 +41,25 @@
 
                 <TextBlock Text="s"
                            FontSize="24"
-                           Foreground="#95A5A6"
+                           Foreground="{StaticResource SecondaryTextBrush}"
                            VerticalAlignment="Bottom"
                            Margin="4,0,0,12"/>
             </StackPanel>
-        </StackPanel>
+
+            <TextBlock Text="{Binding ProcessInfoText}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       FontSize="13"
+                       Foreground="{StaticResource TextBrush}"
+                       Margin="0,8,0,0"/>
+
+            <TextBlock Text="{Binding HintText}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       FontSize="12"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Margin="0,8,0,0"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

@@ -98,6 +98,42 @@ public class ResourceService : IResourceService
         });
     }
 
+    public async Task<IReadOnlyList<ModelFolderInfo>> GetExtraModelFoldersAsync()
+    {
+        return await Task.Run(() =>
+        {
+            var result = new List<ModelFolderInfo>();
+
+            if (!_comfyPathService.IsValid || string.IsNullOrEmpty(_comfyPathService.ComfyUiPath))
+                return result;
+
+            var yamlPath = Path.Combine(_comfyPathService.ComfyUiPath, "extra_model_paths.yaml");
+            if (!File.Exists(yamlPath))
+                return result;
+
+            var mappedFolders = ParseExtraModelPathsYaml(yamlPath);
+            foreach (var (name, path) in mappedFolders)
+            {
+                if (!Directory.Exists(path))
+                    continue;
+
+                result.Add(new ModelFolderInfo
+                {
+                    Name = name,
+                    Path = path,
+                    SizeBytes = 0,
+                    FileCount = 0
+                });
+            }
+
+            return result
+                .GroupBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(x => x.Name)
+                .ToList();
+        });
+    }
+
     public async Task<IReadOnlyList<WorkflowInfo>> GetWorkflowsAsync()
     {
         return await Task.Run(() =>
@@ -226,6 +262,90 @@ public class ResourceService : IResourceService
         }
 
         return null;
+    }
+
+    private IReadOnlyList<(string Name, string Path)> ParseExtraModelPathsYaml(string yamlPath)
+    {
+        var result = new List<(string Name, string Path)>();
+
+        try
+        {
+            var lines = File.ReadAllLines(yamlPath);
+            string? currentSection = null;
+            string? basePath = null;
+
+            foreach (var rawLine in lines)
+            {
+                if (string.IsNullOrWhiteSpace(rawLine))
+                    continue;
+
+                var line = rawLine.Trim();
+                if (line.StartsWith("#"))
+                    continue;
+
+                if (!rawLine.StartsWith(" ") && line.EndsWith(":"))
+                {
+                    currentSection = line.TrimEnd(':');
+                    basePath = null;
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(currentSection))
+                    continue;
+
+                if (line.StartsWith("base_path:"))
+                {
+                    basePath = NormalizeYamlValue(line.Substring("base_path:".Length));
+                    continue;
+                }
+
+                var keyValueSplit = line.Split(':', 2);
+                if (keyValueSplit.Length != 2)
+                    continue;
+
+                var key = keyValueSplit[0].Trim();
+                var value = NormalizeYamlValue(keyValueSplit[1]);
+
+                if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value) || key == "base_path")
+                    continue;
+
+                var fullPath = value;
+                if (!Path.IsPathRooted(fullPath))
+                {
+                    if (string.IsNullOrWhiteSpace(basePath))
+                        continue;
+
+                    fullPath = Path.Combine(basePath, fullPath);
+                }
+
+                result.Add((key, Path.GetFullPath(fullPath)));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError($"解析 extra_model_paths.yaml 失败: {yamlPath}", ex);
+        }
+
+        return result;
+    }
+
+    private static string NormalizeYamlValue(string value)
+    {
+        var normalized = value.Trim();
+
+        var commentIndex = normalized.IndexOf(" #", StringComparison.Ordinal);
+        if (commentIndex >= 0)
+        {
+            normalized = normalized.Substring(0, commentIndex).Trim();
+        }
+
+        if ((normalized.StartsWith("\"") && normalized.EndsWith("\"")) ||
+            (normalized.StartsWith("'") && normalized.EndsWith("'")))
+        {
+            normalized = normalized.Substring(1, normalized.Length - 2);
+        }
+
+        return normalized.Replace('/', Path.DirectorySeparatorChar).Trim();
     }
 
     public async Task<IReadOnlyDictionary<string, string>> GetModelDescriptionsAsync()

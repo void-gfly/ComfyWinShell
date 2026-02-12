@@ -327,12 +327,18 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
     private static void RunOnUiThread(Action action)
     {
-        if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        if (dispatcher.CheckAccess())
         {
             action();
             return;
         }
 
-        System.Windows.Application.Current?.Dispatcher?.Invoke(action);
+        _ = dispatcher.BeginInvoke(action);
     }
 }

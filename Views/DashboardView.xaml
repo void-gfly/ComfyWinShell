@@ -3,10 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:WpfDesktop.Converters"
              xmlns:local="clr-namespace:WpfDesktop.Views"
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="800">
     <UserControl.Resources>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="#141414"/>
             <Setter Property="BorderBrush" Value="#262626"/>
@@ -104,20 +107,29 @@
 
                         <!-- Path -->
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="路径" Style="{StaticResource LabelStyle}"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ActiveVersionPath}">
-                             <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource ValueStyle}">
-                                    <Setter Property="Foreground" Value="#CCCCCC"/>
-                                    <Setter Property="Opacity" Value="0.6"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsComfyUiFound}" Value="False">
-                                            <Setter Property="Foreground" Value="#FF453A"/>
-                                            <Setter Property="Opacity" Value="1"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <StackPanel Grid.Row="3" Grid.Column="1">
+                            <TextBlock Text="{Binding ActiveVersionPath}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource ValueStyle}">
+                                        <Setter Property="Foreground" Value="#CCCCCC"/>
+                                        <Setter Property="Opacity" Value="0.6"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsComfyUiFound}" Value="False">
+                                                <Setter Property="Foreground" Value="#FF453A"/>
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Button Content="定位目录"
+                                    Command="{Binding LocatePythonDirectoryCommand}"
+                                    Visibility="{Binding IsComfyUiFound, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
+                                    Margin="0,6,8,8"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,5"
+                                    FontSize="12"/>
+                        </StackPanel>
                     </Grid>
                 </Grid>
             </Border>
@@ -149,6 +161,8 @@
                         <Button Content="output 目录" Command="{Binding OpenFolderCommand}" CommandParameter="output"
                                 Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
                         <Button Content="model 目录" Command="{Binding OpenFolderCommand}" CommandParameter="models"
+                                Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
+                        <Button Content="扩展Model" Command="{Binding OpenFolderCommand}" CommandParameter="extra-models"
                                 Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
                         <Button Content="工作流目录" Command="{Binding OpenFolderCommand}" CommandParameter="user/default/workflows"
                                 Margin="0,0,8,8" Padding="12,5" FontSize="12"/>

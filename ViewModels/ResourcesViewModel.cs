@@ -33,6 +33,7 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     public ObservableCollection<CustomNodeInfo> CustomNodes { get; } = new();
     public ObservableCollection<ModelFolderInfo> ModelFolders { get; } = new();
+    public ObservableCollection<ModelFolderInfo> ExtraModelFolders { get; } = new();
     public ObservableCollection<WorkflowInfo> Workflows { get; } = new();
 
     [ObservableProperty]
@@ -61,6 +62,12 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     [ObservableProperty]
     private string _totalModelSize = "计算中...";
+
+    [ObservableProperty]
+    private int _extraModelFoldersCount;
+
+    [ObservableProperty]
+    private string _totalExtraModelSize = "计算中...";
 
     #endregion
 
@@ -201,11 +208,14 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
     {
         CustomNodes.Clear();
         ModelFolders.Clear();
+        ExtraModelFolders.Clear();
         Workflows.Clear();
         CustomNodesCount = 0;
         ModelFoldersCount = 0;
+        ExtraModelFoldersCount = 0;
         WorkflowsCount = 0;
         TotalModelSize = "0 GB";
+        TotalExtraModelSize = "0 GB";
     }
 
     private async Task LoadAllResourcesAsync()
@@ -216,13 +226,17 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         StatusMessage = "正在加载模型文件夹...";
         await LoadModelFoldersAsync();
 
+        StatusMessage = "正在加载扩展模型文件夹...";
+        await LoadExtraModelFoldersAsync();
+
         StatusMessage = "正在加载工作流...";
         await LoadWorkflowsAsync();
 
-        StatusMessage = $"已加载 {CustomNodesCount} 个节点, {ModelFoldersCount} 个模型目录, {WorkflowsCount} 个工作流";
+        StatusMessage = $"已加载 {CustomNodesCount} 个节点, {ModelFoldersCount} 个模型目录, {ExtraModelFoldersCount} 个扩展模型目录, {WorkflowsCount} 个工作流";
 
         // 后台计算模型文件夹大小
-        _ = CalculateModelFolderSizesAsync();
+        _ = CalculateFolderSizesAsync(ModelFolders, false);
+        _ = CalculateFolderSizesAsync(ExtraModelFolders, true);
     }
 
     private async Task LoadCustomNodesAsync()
@@ -264,6 +278,30 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         });
     }
 
+    private async Task LoadExtraModelFoldersAsync()
+    {
+        RunOnUiThread(() => ExtraModelFolders.Clear());
+
+        var folders = await _resourceService.GetExtraModelFoldersAsync();
+        var descriptions = await _resourceService.GetModelDescriptionsAsync();
+
+        RunOnUiThread(() =>
+        {
+            foreach (var folder in folders)
+            {
+                if (descriptions.TryGetValue(folder.Name, out var description))
+                {
+                    folder.Description = description;
+                }
+
+                ExtraModelFolders.Add(folder);
+            }
+
+            ExtraModelFoldersCount = ExtraModelFolders.Count;
+            TotalExtraModelSize = "计算中...";
+        });
+    }
+
     private async Task LoadWorkflowsAsync()
     {
         RunOnUiThread(() => Workflows.Clear());
@@ -279,23 +317,23 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         });
     }
 
-    private async Task CalculateModelFolderSizesAsync()
+    private async Task CalculateFolderSizesAsync(ObservableCollection<ModelFolderInfo> folders, bool isExtraModel)
     {
         // 创建副本以避免集合修改问题
-        var folders = ModelFolders.ToList();
+        var snapshot = folders.ToList();
 
         // 并发计算所有文件夹大小
-        var tasks = folders.Select(async folder =>
+        var tasks = snapshot.Select(async folder =>
         {
             var (sizeBytes, fileCount) = await _resourceService.CalculateFolderSizeAsync(folder.Path);
 
             // 更新单个文件夹信息
             RunOnUiThread(() =>
             {
-                var index = ModelFolders.ToList().FindIndex(f => f.Path == folder.Path);
+                var index = folders.ToList().FindIndex(f => f.Path == folder.Path);
                 if (index >= 0)
                 {
-                    ModelFolders[index] = new ModelFolderInfo
+                    folders[index] = new ModelFolderInfo
                     {
                         Name = folder.Name,
                         Path = folder.Path,
@@ -316,14 +354,22 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
         RunOnUiThread(() =>
         {
-            TotalModelSize = $"{totalSize / (1024.0 * 1024.0 * 1024.0):F2} GB";
+            var sizeText = $"{totalSize / (1024.0 * 1024.0 * 1024.0):F2} GB";
+            if (isExtraModel)
+            {
+                TotalExtraModelSize = sizeText;
+            }
+            else
+            {
+                TotalModelSize = sizeText;
+            }
 
             // 按磁盘占用大小从大到小排序
-            var sortedFolders = ModelFolders.OrderByDescending(f => f.SizeBytes).ToList();
-            ModelFolders.Clear();
+            var sortedFolders = folders.OrderByDescending(f => f.SizeBytes).ToList();
+            folders.Clear();
             foreach (var folder in sortedFolders)
             {
-                ModelFolders.Add(folder);
+                folders.Add(folder);
             }
         });
     }

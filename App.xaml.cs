@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,6 +102,29 @@ namespace WpfDesktop
         {
             if (_host != null)
             {
+                // 应用退出时优先停止 ComfyUI，并强制执行一次残留进程清理
+                try
+                {
+                    var processService = _host.Services.GetRequiredService<IProcessService>();
+                    processService.StopAsync().Wait(TimeSpan.FromSeconds(3));
+
+                    var comfyPathService = _host.Services.GetRequiredService<IComfyPathService>();
+                    comfyPathService.Refresh();
+
+                    var appSettings = _host.Services.GetRequiredService<AppSettings>();
+                    var cleanupRoot = ResolveCleanupRootPath(comfyPathService, appSettings);
+                    if (!string.IsNullOrWhiteSpace(cleanupRoot))
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                        processService.CleanupLingeringProcessesAsync(cleanupRoot, cts.Token).Wait(TimeSpan.FromSeconds(4));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"退出时清理 ComfyUI 进程失败: {ex}");
+                    _logService?.LogError("退出时清理 ComfyUI 进程失败", ex);
+                }
+
                 _host.StopAsync().GetAwaiter().GetResult();
                 _host.Dispose();
                 _host = null;
@@ -108,6 +132,24 @@ namespace WpfDesktop
 
             base.OnExit(e);
         }
+
+        private static string? ResolveCleanupRootPath(IComfyPathService comfyPathService, AppSettings appSettings)
+        {
+            if (comfyPathService.IsValid && !string.IsNullOrWhiteSpace(comfyPathService.ComfyRootPath))
+            {
+                return comfyPathService.ComfyRootPath;
+            }
+
+            if (!string.IsNullOrWhiteSpace(appSettings.PythonRoot))
+            {
+                var pythonRootParent = Path.GetDirectoryName(appSettings.PythonRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!string.IsNullOrWhiteSpace(pythonRootParent))
+                {
+                    return pythonRootParent;
+                }
+            }
+
+            return null;
+        }
     }
 }
-

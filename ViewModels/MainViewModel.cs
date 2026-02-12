@@ -1,7 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 using System.Diagnostics;
 using System.Linq;
@@ -22,6 +26,8 @@ public partial class MainViewModel : ViewModelBase
 
     private string _activeProfileId = DefaultProfileId;
     private ComfyConfiguration? _currentConfiguration;
+    private bool _startupCleanupCompleted;
+    private bool _startupExtraModelYamlSynced;
 
     [ObservableProperty]
     private string _appTitle = "ComfyShell";
@@ -46,6 +52,12 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _statusBarText = "状态: 未启动";
+
+    [ObservableProperty]
+    private string _comfyUiSystemStatsText = "暂无 ComfyUI system_stats 数据";
+
+    public ObservableCollection<SystemStatusItem> ComfyUiSystemRows { get; } = new();
+    public ObservableCollection<SystemDeviceItem> ComfyUiDeviceRows { get; } = new();
 
     public IAsyncRelayCommand ToggleProcessCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
@@ -103,6 +115,7 @@ public partial class MainViewModel : ViewModelBase
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
         _processService.HeartbeatStatusChanged += OnHeartbeatStatusChanged;
+        _processService.SystemStatsUpdated += OnSystemStatsUpdated;
         _logService.LogReceived += OnLogReceived;
 
         WeakReferenceMessenger.Default.Register<AppSettingsChangedMessage>(this, (_, message) =>
@@ -155,6 +168,24 @@ public partial class MainViewModel : ViewModelBase
             var defaultProfile = profiles.FirstOrDefault(profile => profile.IsDefault);
             _activeProfileId = defaultProfile?.Id ?? DefaultProfileId;
             _currentConfiguration = await _configurationService.LoadConfigurationAsync(_activeProfileId);
+            _processService.ConfigureApiEndpoint(_currentConfiguration.Network.Listen, _currentConfiguration.Network.Port);
+
+            if (!_startupCleanupCompleted && _comfyPathService.IsValid && !string.IsNullOrWhiteSpace(_comfyPathService.ComfyRootPath))
+            {
+                var killed = await _processService.CleanupLingeringProcessesAsync(_comfyPathService.ComfyRootPath);
+                _startupCleanupCompleted = true;
+                if (killed > 0)
+                {
+                    StatusMessage = $"启动前已清理 {killed} 个残留 ComfyUI 进程";
+                    _ = Task.Delay(3000).ContinueWith(_ => RunOnUiThread(() => StatusMessage = string.Empty));
+                }
+            }
+
+            if (!_startupExtraModelYamlSynced && _comfyPathService.IsValid)
+            {
+                await SyncExtraModelPathsYamlOnStartupAsync();
+                _startupExtraModelYamlSynced = true;
+            }
 
             var status = await _processService.GetStatusAsync();
             UpdateStatus(status);
@@ -262,6 +293,16 @@ public partial class MainViewModel : ViewModelBase
         RunOnUiThread(() => StatusBarText = isAlive ? "状态: 就绪" : "状态: 未启动");
     }
 
+    private void OnSystemStatsUpdated(object? sender, string statsJson)
+    {
+        if (string.IsNullOrWhiteSpace(statsJson))
+        {
+            return;
+        }
+
+        RunOnUiThread(() => ParseSystemStats(statsJson));
+    }
+
     private void UpdateStatus(ProcessStatus? status)
     {
         if (status == null)
@@ -281,6 +322,7 @@ public partial class MainViewModel : ViewModelBase
             _ => "空闲"
         };
         IsRunning = status.IsRunning;
+        StatusBarText = status.IsRunning ? "状态: 就绪" : "状态: 未启动";
         OpenWebPageCommand.NotifyCanExecuteChanged();
     }
 
@@ -312,12 +354,203 @@ public partial class MainViewModel : ViewModelBase
 
     private static void RunOnUiThread(Action action)
     {
-        if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        if (dispatcher.CheckAccess())
         {
             action();
             return;
         }
 
-        System.Windows.Application.Current?.Dispatcher?.Invoke(action);
+        _ = dispatcher.BeginInvoke(action);
     }
+
+    private async Task SyncExtraModelPathsYamlOnStartupAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_comfyPathService.ComfyUiPath))
+            {
+                return;
+            }
+
+            var yamlPath = Path.Combine(_comfyPathService.ComfyUiPath, "extra_model_paths.yaml");
+            var extraBaseDir = _currentConfiguration?.Paths?.ExtraModelBaseDirectory;
+
+            if (string.IsNullOrWhiteSpace(extraBaseDir))
+            {
+                if (File.Exists(yamlPath))
+                {
+                    File.Delete(yamlPath);
+                }
+                return;
+            }
+
+            if (!Directory.Exists(extraBaseDir))
+            {
+                _logService.Log($"扩展模型目录不存在，跳过自动同步: {extraBaseDir}");
+                return;
+            }
+
+            var yamlContent = ExtraModelPathsYamlHelper.GenerateYamlContent(extraBaseDir);
+            if (File.Exists(yamlPath))
+            {
+                var existing = await File.ReadAllTextAsync(yamlPath);
+                if (string.Equals(existing, yamlContent, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            await File.WriteAllTextAsync(yamlPath, yamlContent, System.Text.Encoding.UTF8);
+            _logService.Log("启动时已自动同步 extra_model_paths.yaml");
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("启动时同步 extra_model_paths.yaml 失败", ex);
+        }
+    }
+
+    private void ParseSystemStats(string statsJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(statsJson);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            ComfyUiSystemRows.Clear();
+            ComfyUiDeviceRows.Clear();
+
+            if (root.TryGetProperty("system", out var system) && system.ValueKind == JsonValueKind.Object)
+            {
+                AddSystemRow("OS", GetString(system, "os"));
+                AddSystemRow("ComfyUI", GetString(system, "comfyui_version"));
+                AddSystemRow("Frontend", GetString(system, "required_frontend_version"));
+                AddSystemRow("Templates(Installed)", GetString(system, "installed_templates_version"));
+                AddSystemRow("Templates(Required)", GetString(system, "required_templates_version"));
+                AddSystemRow("Python", GetString(system, "python_version"));
+                AddSystemRow("PyTorch", GetString(system, "pytorch_version"));
+                AddSystemRow("Embedded Python", GetBool(system, "embedded_python"));
+
+                var ramTotal = GetLong(system, "ram_total");
+                var ramFree = GetLong(system, "ram_free");
+                if (ramTotal.HasValue)
+                {
+                    AddSystemRow("RAM Total", FormatBytes(ramTotal.Value));
+                }
+                if (ramFree.HasValue)
+                {
+                    AddSystemRow("RAM Free", FormatBytes(ramFree.Value));
+                }
+            }
+
+            if (root.TryGetProperty("devices", out var devices) && devices.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var device in devices.EnumerateArray())
+                {
+                    if (device.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    ComfyUiDeviceRows.Add(new SystemDeviceItem
+                    {
+                        Name = GetString(device, "name") ?? "-",
+                        Type = GetString(device, "type") ?? "-",
+                        Index = GetInt(device, "index")?.ToString() ?? "-",
+                        VramTotal = FormatBytes(GetLong(device, "vram_total") ?? 0),
+                        VramFree = FormatBytes(GetLong(device, "vram_free") ?? 0)
+                    });
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            ComfyUiSystemRows.Clear();
+            ComfyUiDeviceRows.Clear();
+            ComfyUiSystemRows.Add(new SystemStatusItem { Key = "Raw", Value = statsJson });
+        }
+    }
+
+    private void AddSystemRow(string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        ComfyUiSystemRows.Add(new SystemStatusItem { Key = key, Value = value });
+    }
+
+    private static string? GetString(JsonElement obj, string name)
+    {
+        return obj.TryGetProperty(name, out var value) ? value.ToString() : null;
+    }
+
+    private static string? GetBool(JsonElement obj, string name)
+    {
+        if (!obj.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.True ? "Yes" :
+               value.ValueKind == JsonValueKind.False ? "No" : value.ToString();
+    }
+
+    private static long? GetLong(JsonElement obj, string name)
+    {
+        return obj.TryGetProperty(name, out var value) && value.TryGetInt64(out var longValue) ? longValue : null;
+    }
+
+    private static int? GetInt(JsonElement obj, string name)
+    {
+        return obj.TryGetProperty(name, out var value) && value.TryGetInt32(out var intValue) ? intValue : null;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 B";
+        }
+
+        var gb = bytes / (1024.0 * 1024.0 * 1024.0);
+        if (gb >= 1)
+        {
+            return $"{gb:F2} GB";
+        }
+
+        var mb = bytes / (1024.0 * 1024.0);
+        if (mb >= 1)
+        {
+            return $"{mb:F2} MB";
+        }
+
+        var kb = bytes / 1024.0;
+        return kb >= 1 ? $"{kb:F2} KB" : $"{bytes} B";
+    }
+}
+
+public class SystemStatusItem
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+}
+
+public class SystemDeviceItem
+{
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Index { get; set; } = string.Empty;
+    public string VramTotal { get; set; } = string.Empty;
+    public string VramFree { get; set; } = string.Empty;
 }

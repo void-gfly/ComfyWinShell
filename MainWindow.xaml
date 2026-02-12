@@ -184,7 +184,114 @@
                     Background="#0A0A0A">
                 <Grid>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding StatusBarText}" VerticalAlignment="Center" FontSize="12"/>
+                        <Border Background="Transparent" Padding="2,0">
+                            <Border.ToolTip>
+                                <ToolTip Placement="Top"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         HasDropShadow="False"
+                                         MaxWidth="800">
+                                    <Border Background="#141414"
+                                            BorderBrush="#2A2A2A"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="12"
+                                            MinWidth="420"
+                                            MaxWidth="800">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      MaxHeight="520">
+                                            <StackPanel>
+                                                <TextBlock Text="ComfyUI system_stats"
+                                                           Foreground="{DynamicResource AccentBrush}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,0,0,8"/>
+                                                <ItemsControl ItemsSource="{Binding ComfyUiSystemRows}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,0,0,4">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="170"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="{Binding Key}"
+                                                                           Foreground="#A0A0A0"
+                                                                           FontSize="12"/>
+                                                                <TextBlock Grid.Column="1"
+                                                                           Text="{Binding Value}"
+                                                                           Foreground="#E0E0E0"
+                                                                           FontSize="12"
+                                                                           TextWrapping="WrapWithOverflow"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <TextBlock Text="Devices"
+                                                           Foreground="{DynamicResource AccentBrush}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,8,0,6"/>
+                                                <ItemsControl ItemsSource="{Binding ComfyUiDeviceRows}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="#101010"
+                                                                    BorderBrush="#2A2A2A"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="6"
+                                                                    Padding="8"
+                                                                    Margin="0,0,0,6">
+                                                                <StackPanel>
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               Foreground="#E0E0E0"
+                                                                               FontSize="12"
+                                                                               FontWeight="SemiBold"
+                                                                               TextWrapping="WrapWithOverflow"
+                                                                               Margin="0,0,0,4"/>
+                                                                    <Grid Margin="0,0,0,2">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="70"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="Type" Foreground="#A0A0A0" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Type}" Foreground="#D0D0D0" FontSize="12" TextWrapping="WrapWithOverflow"/>
+                                                                    </Grid>
+                                                                    <Grid Margin="0,0,0,2">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="70"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="Index" Foreground="#A0A0A0" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Index}" Foreground="#D0D0D0" FontSize="12" TextWrapping="WrapWithOverflow"/>
+                                                                    </Grid>
+                                                                    <Grid Margin="0,0,0,2">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="70"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="VRAM 总量" Foreground="#A0A0A0" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding VramTotal}" Foreground="#D0D0D0" FontSize="12" TextWrapping="WrapWithOverflow"/>
+                                                                    </Grid>
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="70"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="VRAM 空闲" Foreground="#A0A0A0" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding VramFree}" Foreground="#D0D0D0" FontSize="12" TextWrapping="WrapWithOverflow"/>
+                                                                    </Grid>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </Border>
+                                </ToolTip>
+                            </Border.ToolTip>
+                            <TextBlock Text="{Binding StatusBarText}" VerticalAlignment="Center" FontSize="12"/>
+                        </Border>
                         <!-- Last Log Line -->
                         <TextBlock Text="{Binding LastLogLine}"
                                    Foreground="#808080"

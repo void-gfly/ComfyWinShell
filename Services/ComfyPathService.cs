@@ -1,4 +1,5 @@
 using System.IO;
+using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
@@ -17,13 +18,16 @@ namespace WpfDesktop.Services;
 /// </summary>
 public class ComfyPathService : IComfyPathService
 {
+    private readonly AppSettings _appSettings;
+
     public string? ComfyUiPath { get; private set; }
     public string? ComfyRootPath { get; private set; }
     public bool IsValid { get; private set; }
     public string? ErrorMessage { get; private set; }
 
-    public ComfyPathService()
+    public ComfyPathService(AppSettings appSettings)
     {
+        _appSettings = appSettings;
         Refresh();
     }
 
@@ -33,6 +37,23 @@ public class ComfyPathService : IComfyPathService
         ComfyRootPath = null;
         IsValid = false;
         ErrorMessage = null;
+
+        // 第一优先级：根据 PythonRoot 所在目录查找同级 ComfyUI
+        if (!string.IsNullOrWhiteSpace(_appSettings.PythonRoot))
+        {
+            var pythonRootParent = Path.GetDirectoryName(_appSettings.PythonRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!string.IsNullOrWhiteSpace(pythonRootParent))
+            {
+                var siblingComfyPath = Path.Combine(pythonRootParent, "ComfyUI");
+                if (IsValidComfyUiDirectory(siblingComfyPath))
+                {
+                    ComfyRootPath = pythonRootParent;
+                    ComfyUiPath = siblingComfyPath;
+                    IsValid = true;
+                    return;
+                }
+            }
+        }
 
         var appDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
 

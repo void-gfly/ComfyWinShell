@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.IO;
+using System.Management;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -22,7 +24,10 @@ public class ProcessService : IProcessService, IDisposable
     private readonly Timer _heartbeatTimer;
     private Process? _process;
     private ProcessStatus _status = new();
-    private string? _comfyApiUrl;
+    private string _comfyApiUrl = "http://127.0.0.1:8188/system_stats";
+    private string? _lastPythonPath;
+    private string? _lastMainPath;
+    private string _lastSystemStats = "暂无 ComfyUI system_stats 数据";
     private bool _isHeartbeatEnabled;
     private bool _lastHeartbeatSuccess;
 
@@ -41,9 +46,10 @@ public class ProcessService : IProcessService, IDisposable
     public event EventHandler<ProcessStatus>? StatusChanged;
     public event EventHandler<string>? OutputReceived;
     public event EventHandler<bool>? HeartbeatStatusChanged;
+    public event EventHandler<string>? SystemStatsUpdated;
 
     public ProcessService(
-        ArgumentBuilder argumentBuilder, 
+        ArgumentBuilder argumentBuilder,
         IPythonPathService pythonPathService,
         IProxyService proxyService,
         ILogService logService)
@@ -56,19 +62,45 @@ public class ProcessService : IProcessService, IDisposable
         _heartbeatTimer = new Timer(OnHeartbeatTick, null, Timeout.Infinite, Timeout.Infinite);
     }
 
-    public Task<ProcessStatus?> GetStatusAsync(CancellationToken cancellationToken = default)
+    public void ConfigureApiEndpoint(string listen, int port)
     {
-        if (_process == null || _process.HasExited)
+        var normalizedListen = listen == "0.0.0.0" ? "127.0.0.1" : listen;
+        _comfyApiUrl = $"http://{normalizedListen}:{port}/system_stats";
+    }
+
+    public async Task<ProcessStatus?> GetStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var apiAlive = await CheckHeartbeatAsync();
+        if (apiAlive)
         {
-            return Task.FromResult<ProcessStatus?>(null);
+            _status.State = ProcessState.Running;
+            _status.IsRunning = true;
+            if (!_status.StartTime.HasValue)
+            {
+                _status.StartTime = DateTime.Now;
+            }
+
+            if (_status.StartTime.HasValue)
+            {
+                _status.Uptime = DateTime.Now - _status.StartTime.Value;
+            }
+
+            return _status;
         }
 
-        if (_status.StartTime.HasValue)
+        if (_process is { HasExited: false })
         {
-            _status.Uptime = DateTime.Now - _status.StartTime.Value;
+            if (_status.StartTime.HasValue)
+            {
+                _status.Uptime = DateTime.Now - _status.StartTime.Value;
+            }
+
+            return _status;
         }
 
-        return Task.FromResult<ProcessStatus?>(_status);
+        _status.State = ProcessState.Stopped;
+        _status.IsRunning = false;
+        return null;
     }
 
     public Task<bool> StartAsync(string comfyRootPath, ComfyConfiguration configuration, CancellationToken cancellationToken = default)
@@ -91,10 +123,7 @@ public class ProcessService : IProcessService, IDisposable
             return Task.FromResult(false);
         }
 
-        // 记录 API 地址用于心跳检测
-        var listen = configuration.Network.Listen;
-        var port = configuration.Network.Port;
-        _comfyApiUrl = $"http://{(listen == "0.0.0.0" ? "127.0.0.1" : listen)}:{port}/system_stats";
+        ConfigureApiEndpoint(configuration.Network.Listen, configuration.Network.Port);
 
         var fullCommand = string.IsNullOrWhiteSpace(startInfo.Arguments)
             ? $"\"{startInfo.FileName}\""
@@ -144,8 +173,6 @@ public class ProcessService : IProcessService, IDisposable
             _status.StartTime = DateTime.Now;
             _status.ProcessId = _process.Id;
             StatusChanged?.Invoke(this, _status);
-
-            // 启动心跳检测
             StartHeartbeat();
         }
         else
@@ -160,11 +187,8 @@ public class ProcessService : IProcessService, IDisposable
 
     private void OnProcessExited(object? sender, EventArgs e)
     {
-        // 进程退出时，不立即更新状态为Stopped
-        // 而是等待心跳检测确认服务是否真的停止了（可能是内部重启）
         OutputReceived?.Invoke(this, "[ProcessService] 检测到进程退出，正在检查服务状态...");
 
-        // 延迟一段时间后检查，给内部重启留出时间
         Task.Run(async () =>
         {
             await Task.Delay(2000);
@@ -172,22 +196,20 @@ public class ProcessService : IProcessService, IDisposable
 
             if (isAlive)
             {
-                // 服务仍在运行，说明是内部重启
                 OutputReceived?.Invoke(this, "[ProcessService] 检测到 ComfyUI 内部重启，服务仍在运行");
                 _status.State = ProcessState.Running;
                 _status.IsRunning = true;
-                // 进程ID可能已变化，清除旧的
                 _status.ProcessId = null;
             }
             else
             {
-                // 服务确实停止了
                 _status.State = ProcessState.Stopped;
                 _status.IsRunning = false;
                 if (_status.StartTime.HasValue)
                 {
                     _status.Uptime = DateTime.Now - _status.StartTime.Value;
                 }
+
                 StopHeartbeat();
             }
 
@@ -201,18 +223,76 @@ public class ProcessService : IProcessService, IDisposable
 
         if (_process == null || _process.HasExited)
         {
-            // 即使我们的进程对象无效，也尝试通过状态重置
+            var killed = TryKillLingeringComfyPythonProcesses();
             _status.State = ProcessState.Stopped;
             _status.IsRunning = false;
             StatusChanged?.Invoke(this, _status);
-            return Task.FromResult(false);
+            return Task.FromResult(killed);
         }
 
         _status.State = ProcessState.Stopping;
         StatusChanged?.Invoke(this, _status);
-
-        _process.Kill(true);
+        _process.Kill();
         return Task.FromResult(true);
+    }
+
+    public async Task<int> CleanupLingeringProcessesAsync(string comfyRootPath, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(comfyRootPath))
+        {
+            return 0;
+        }
+
+        _pythonPathService.Resolve(comfyRootPath);
+        var pythonPath = _pythonPathService.PythonPath;
+        var mainPath = ResolveMainPath(comfyRootPath);
+
+        if (string.IsNullOrWhiteSpace(pythonPath) || string.IsNullOrWhiteSpace(mainPath))
+        {
+            return 0;
+        }
+
+        _lastPythonPath = pythonPath;
+        _lastMainPath = mainPath;
+
+        return await Task.Run(() =>
+        {
+            var killed = 0;
+            foreach (var process in Process.GetProcessesByName("python"))
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                try
+                {
+                    if (process.HasExited)
+                    {
+                        continue;
+                    }
+
+                    if (!IsTargetComfyPythonProcess(process, pythonPath, mainPath))
+                    {
+                        continue;
+                    }
+
+                    process.Kill();
+                    killed++;
+                    OutputReceived?.Invoke(this, $"[ProcessService] 启动前已清理残留进程 PID={process.Id}");
+                }
+                catch (Exception ex)
+                {
+                    _logService.LogError("启动前清理残留进程失败", ex);
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+
+            return killed;
+        }, cancellationToken);
     }
 
     public Task<bool> RequestGracefulStopAsync(CancellationToken cancellationToken = default)
@@ -235,12 +315,7 @@ public class ProcessService : IProcessService, IDisposable
 
     public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        if (_process == null)
-        {
-            return true;
-        }
-
-        if (_process.HasExited)
+        if (_process == null || _process.HasExited)
         {
             return true;
         }
@@ -288,11 +363,11 @@ public class ProcessService : IProcessService, IDisposable
     private async void OnHeartbeatTick(object? state)
     {
         if (!_isHeartbeatEnabled)
+        {
             return;
+        }
 
         var isAlive = await CheckHeartbeatAsync();
-
-        // 检测状态变化
         if (isAlive != _lastHeartbeatSuccess)
         {
             _lastHeartbeatSuccess = isAlive;
@@ -300,7 +375,6 @@ public class ProcessService : IProcessService, IDisposable
 
             if (isAlive && _status.State != ProcessState.Running)
             {
-                // 服务恢复运行（可能是内部重启完成）
                 OutputReceived?.Invoke(this, "[ProcessService] 心跳检测：ComfyUI 服务已就绪");
                 _status.State = ProcessState.Running;
                 _status.IsRunning = true;
@@ -308,7 +382,6 @@ public class ProcessService : IProcessService, IDisposable
             }
             else if (!isAlive && _status.State == ProcessState.Running)
             {
-                // 服务暂时不可用（可能正在内部重启）
                 OutputReceived?.Invoke(this, "[ProcessService] 心跳检测：ComfyUI 服务暂时不可用，可能正在重启...");
             }
         }
@@ -316,23 +389,60 @@ public class ProcessService : IProcessService, IDisposable
 
     private async Task<bool> CheckHeartbeatAsync()
     {
-        if (string.IsNullOrEmpty(_comfyApiUrl))
+        if (string.IsNullOrWhiteSpace(_comfyApiUrl))
+        {
             return false;
+        }
 
         try
         {
             using var response = await _httpClient.GetAsync(_comfyApiUrl);
-            return response.IsSuccessStatusCode;
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            var responseText = await response.Content.ReadAsStringAsync();
+            UpdateSystemStats(responseText);
+            return true;
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            _logService.LogError($"心跳检测 HTTP 请求失败: {_comfyApiUrl}", ex);
             return false;
         }
         catch (TaskCanceledException)
         {
-            // 心跳超时是正常情况（服务未启动或正在重启），不记录日志避免刷屏
             return false;
+        }
+    }
+
+    private void UpdateSystemStats(string responseText)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(responseText);
+            var pretty = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            if (string.Equals(pretty, _lastSystemStats, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastSystemStats = pretty;
+            SystemStatsUpdated?.Invoke(this, pretty);
+        }
+        catch (JsonException)
+        {
+            if (string.Equals(responseText, _lastSystemStats, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastSystemStats = responseText;
+            SystemStatsUpdated?.Invoke(this, responseText);
         }
     }
 
@@ -355,7 +465,7 @@ public class ProcessService : IProcessService, IDisposable
             SetConsoleCtrlHandler(IntPtr.Zero, true);
             return GenerateConsoleCtrlEvent(ctrlEvent, 0);
         }
-        catch (Exception)
+        catch
         {
             return false;
         }
@@ -376,8 +486,6 @@ public class ProcessService : IProcessService, IDisposable
             return null;
         }
 
-        // 始终使用 Python 直接启动（与 Dashboard 的“启动命令预览”保持一致）。
-        // 不再优先/依赖 run*.bat 脚本，避免 cmd/bat 编码与环境差异导致的异常。
         _pythonPathService.Resolve(comfyRootPath);
         var pythonPath = _pythonPathService.PythonPath;
         var mainPath = ResolveMainPath(comfyRootPath);
@@ -385,6 +493,9 @@ public class ProcessService : IProcessService, IDisposable
         {
             return null;
         }
+
+        _lastPythonPath = pythonPath;
+        _lastMainPath = mainPath;
 
         var argsStr = string.IsNullOrWhiteSpace(arguments) ? "" : $" {arguments}";
         var startInfo = new ProcessStartInfo
@@ -400,23 +511,102 @@ public class ProcessService : IProcessService, IDisposable
             CreateNoWindow = true
         };
 
-        // 配置代理环境变量
         _proxyService.ConfigureProcessProxy(startInfo);
-
+        startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+        startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
         return startInfo;
     }
 
+    private bool TryKillLingeringComfyPythonProcesses()
+    {
+        if (string.IsNullOrWhiteSpace(_lastPythonPath) || string.IsNullOrWhiteSpace(_lastMainPath))
+        {
+            return false;
+        }
+
+        var killedAny = false;
+        foreach (var process in Process.GetProcessesByName("python"))
+        {
+            try
+            {
+                if (process.HasExited)
+                {
+                    continue;
+                }
+
+                if (!IsTargetComfyPythonProcess(process, _lastPythonPath, _lastMainPath))
+                {
+                    continue;
+                }
+
+                process.Kill();
+                killedAny = true;
+                OutputReceived?.Invoke(this, $"[ProcessService] 已清理残留 Python 进程 PID={process.Id}");
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError("清理残留 Python 进程失败", ex);
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return killedAny;
+    }
+
+    private bool IsTargetComfyPythonProcess(Process process, string pythonPath, string mainPath)
+    {
+        var processPath = process.MainModule?.FileName;
+        if (string.IsNullOrWhiteSpace(processPath))
+        {
+            return false;
+        }
+
+        if (!string.Equals(processPath, pythonPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var commandLine = TryGetProcessCommandLine(process.Id);
+        if (string.IsNullOrWhiteSpace(commandLine))
+        {
+            return false;
+        }
+
+        return commandLine.Contains(mainPath, StringComparison.OrdinalIgnoreCase) &&
+               commandLine.Contains("--windows-standalone-build", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string? TryGetProcessCommandLine(int processId)
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {processId}");
+            foreach (var item in searcher.Get())
+            {
+                using var processObject = (ManagementObject)item;
+                return processObject["CommandLine"]?.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError($"读取进程命令行失败 PID={processId}", ex);
+        }
+
+        return null;
+    }
 
     private static string? ResolveMainPath(string rootPath)
     {
-        // 便携版: rootPath/ComfyUI/main.py
         var comfyMain = Path.Combine(rootPath, "ComfyUI", "main.py");
         if (File.Exists(comfyMain))
         {
             return comfyMain;
         }
 
-        // 直接克隆版: rootPath/main.py (此时 rootPath 就是 ComfyUI 目录)
         var rootMain = Path.Combine(rootPath, "main.py");
         if (File.Exists(rootMain))
         {

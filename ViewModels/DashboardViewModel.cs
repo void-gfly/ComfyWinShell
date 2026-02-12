@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WpfDesktop.Models;
@@ -16,6 +17,8 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
     private readonly IPythonPathService _pythonPathService;
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly ILogService _logService;
+    private readonly IDialogService _dialogService;
+    private readonly AppSettings _appSettings;
 
     public DashboardViewModel(
         IComfyPathService comfyPathService,
@@ -23,7 +26,9 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
         IConfigurationService configurationService,
         IPythonPathService pythonPathService,
         ArgumentBuilder argumentBuilder,
-        ILogService logService)
+        ILogService logService,
+        IDialogService dialogService,
+        AppSettings appSettings)
     {
         _comfyPathService = comfyPathService;
         _profileService = profileService;
@@ -31,6 +36,8 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
         _pythonPathService = pythonPathService;
         _argumentBuilder = argumentBuilder;
         _logService = logService;
+        _dialogService = dialogService;
+        _appSettings = appSettings;
 
         // 构造函数中不再自动刷新，由导航事件触发
     }
@@ -130,14 +137,18 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
     }
 
     [RelayCommand]
-    private void OpenFolder(string folderName)
+    private async Task OpenFolder(string folderName)
     {
         if (!_comfyPathService.IsValid || string.IsNullOrEmpty(_comfyPathService.ComfyUiPath))
         {
             return;
         }
 
-        var path = Path.Combine(_comfyPathService.ComfyUiPath, folderName);
+        var path = await ResolveQuickAccessPathAsync(folderName);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
 
         // Handle nested paths correctly if they use forward slashes
         path = path.Replace('/', Path.DirectorySeparatorChar);
@@ -165,6 +176,57 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
         }
     }
 
+    [RelayCommand]
+    private async Task LocatePythonDirectoryAsync()
+    {
+        var selected = _dialogService.SelectFolder("选择 ComfyUI 的 Python 目录（包含 python.exe）", _appSettings.PythonRoot);
+        if (string.IsNullOrWhiteSpace(selected))
+        {
+            return;
+        }
+
+        var pythonExe = Path.Combine(selected, "python.exe");
+        if (!File.Exists(pythonExe))
+        {
+            _logService.LogError($"所选目录不包含 python.exe: {selected}");
+            ActivePythonPath = "所选目录无效（缺少 python.exe）";
+            IsPythonValid = false;
+            return;
+        }
+
+        try
+        {
+            _appSettings.PythonRoot = selected;
+            SaveAppSettings(_appSettings);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("保存 Python 目录失败", ex);
+        }
+    }
+
+    private async Task<string?> ResolveQuickAccessPathAsync(string folderName)
+    {
+        if (string.Equals(folderName, "extra-models", StringComparison.OrdinalIgnoreCase))
+        {
+            var profiles = await _profileService.GetProfilesAsync();
+            var defaultProfile = profiles.FirstOrDefault(profile => profile.IsDefault);
+            var profileId = defaultProfile?.Id ?? "default";
+            var configuration = await _configurationService.LoadConfigurationAsync(profileId);
+            var extraModelBase = configuration.Paths.ExtraModelBaseDirectory;
+
+            if (!string.IsNullOrWhiteSpace(extraModelBase))
+            {
+                return extraModelBase;
+            }
+
+            return Path.Combine(_comfyPathService.ComfyUiPath!, "models");
+        }
+
+        return Path.Combine(_comfyPathService.ComfyUiPath!, folderName);
+    }
+
     private static string? ResolveMainPath(string rootPath)
     {
         var comfyMain = Path.Combine(rootPath, "ComfyUI", "main.py");
@@ -176,5 +238,15 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
             return rootMain;
 
         return null;
+    }
+
+    private static void SaveAppSettings(AppSettings appSettings)
+    {
+        var settingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        var json = JsonSerializer.Serialize(new { AppSettings = appSettings }, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+        File.WriteAllText(settingsPath, json);
     }
 }

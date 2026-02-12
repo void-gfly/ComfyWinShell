@@ -20,6 +20,12 @@ public interface IResourceService
     Task<IReadOnlyList<ModelFolderInfo>> GetModelFoldersAsync();
 
     /// <summary>
+    /// 获取 extra_model_paths.yaml 中配置的扩展模型文件夹信息
+    /// </summary>
+    /// <returns>扩展模型文件夹列表</returns>
+    Task<IReadOnlyList<ModelFolderInfo>> GetExtraModelFoldersAsync();
+
+    /// <summary>
     /// 获取所有工作流文件
     /// </summary>
     /// <returns>工作流文件列表</returns>
