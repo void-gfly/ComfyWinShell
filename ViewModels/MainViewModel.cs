@@ -9,6 +9,7 @@ using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 using System.Diagnostics;
 using System.Linq;
+using System.Windows.Threading;
 
 namespace WpfDesktop.ViewModels;
 
@@ -23,6 +24,8 @@ public partial class MainViewModel : ViewModelBase
     private readonly IConfigurationService _configurationService;
     private readonly ISettingsService _settingsService;
     private readonly ILogService _logService;
+    private readonly IHardwareMonitorService _hardwareMonitorService;
+    private readonly DispatcherTimer _gpuStatusTimer;
 
     private string _activeProfileId = DefaultProfileId;
     private ComfyConfiguration? _currentConfiguration;
@@ -56,8 +59,12 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _comfyUiSystemStatsText = "暂无 ComfyUI system_stats 数据";
 
+    [ObservableProperty]
+    private GpuRingStatusItem _cpuStatusItem = new();
+
     public ObservableCollection<SystemStatusItem> ComfyUiSystemRows { get; } = new();
     public ObservableCollection<SystemDeviceItem> ComfyUiDeviceRows { get; } = new();
+    public ObservableCollection<GpuRingStatusItem> GpuStatusItems { get; } = new();
 
     public IAsyncRelayCommand ToggleProcessCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
@@ -77,6 +84,7 @@ public partial class MainViewModel : ViewModelBase
         IProfileService profileService,
         IConfigurationService configurationService,
         ISettingsService settingsService,
+        IHardwareMonitorService hardwareMonitorService,
         ILogService logService)
     {
         _processService = processService;
@@ -84,6 +92,7 @@ public partial class MainViewModel : ViewModelBase
         _profileService = profileService;
         _configurationService = configurationService;
         _settingsService = settingsService;
+        _hardwareMonitorService = hardwareMonitorService;
         _logService = logService;
 
         _viewModels = new Dictionary<string, ViewModelBase>(StringComparer.OrdinalIgnoreCase)
@@ -123,7 +132,15 @@ public partial class MainViewModel : ViewModelBase
             RunOnUiThread(() => UpdateAppTitle(message.Value));
         });
 
+        _gpuStatusTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _gpuStatusTimer.Tick += (_, _) => RefreshGpuStatusSummary();
+        _gpuStatusTimer.Start();
+
         _ = LoadAppTitleAsync();
+        RefreshGpuStatusSummary();
 
         // 初始化状态
         _ = RefreshAsync();
@@ -487,6 +504,107 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    private void RefreshGpuStatusSummary()
+    {
+        try
+        {
+            var snapshot = _hardwareMonitorService.GetSnapshot();
+            var cpuPercent = snapshot.CpuLoadPercent.HasValue ? Math.Clamp(snapshot.CpuLoadPercent.Value, 0, 100) : 0;
+            var cpuMemoryPercent = ResolveMemoryPercent(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);
+
+            CpuStatusItem.DisplayName = "CPU";
+            CpuStatusItem.DetailedName = string.IsNullOrWhiteSpace(snapshot.CpuName) ? "CPU" : snapshot.CpuName;
+            CpuStatusItem.LoadPercent = cpuPercent;
+            CpuStatusItem.LoadArcData = GpuRingStatusItem.BuildArcPathData(cpuPercent);
+            CpuStatusItem.MemoryPercent = cpuMemoryPercent;
+            CpuStatusItem.MemoryArcData = GpuRingStatusItem.BuildArcPathData(cpuMemoryPercent);
+            CpuStatusItem.LoadRingColor = "#F6A23A";
+            CpuStatusItem.MemoryRingColor = "#C084FC";
+
+            var gpuSnapshots = snapshot.Gpus;
+            if (gpuSnapshots.Count == 0)
+            {
+                GpuStatusItems.Clear();
+                return;
+            }
+
+            if (GpuStatusItems.Count != gpuSnapshots.Count)
+            {
+                GpuStatusItems.Clear();
+                for (var i = 0; i < gpuSnapshots.Count; i++)
+                {
+                    var gpu = gpuSnapshots[i];
+                    var percent = ResolveGpuUsagePercent(gpu);
+                    GpuStatusItems.Add(new GpuRingStatusItem
+                    {
+                        DisplayName = $"GPU{i}",
+                        DetailedName = string.IsNullOrWhiteSpace(gpu.Name) ? $"GPU{i}" : gpu.Name,
+                        LoadPercent = percent,
+                        LoadArcData = GpuRingStatusItem.BuildArcPathData(percent),
+                        MemoryPercent = ResolveMemoryPercent(gpu.MemoryUsedMb, gpu.MemoryTotalMb),
+                        MemoryArcData = GpuRingStatusItem.BuildArcPathData(ResolveMemoryPercent(gpu.MemoryUsedMb, gpu.MemoryTotalMb)),
+                        LoadRingColor = "#6EC1FF",
+                        MemoryRingColor = "#4ADE80"
+                    });
+                }
+
+                return;
+            }
+
+            for (var i = 0; i < gpuSnapshots.Count; i++)
+            {
+                var gpu = gpuSnapshots[i];
+                var percent = ResolveGpuUsagePercent(gpu);
+                var item = GpuStatusItems[i];
+                item.DisplayName = $"GPU{i}";
+                item.DetailedName = string.IsNullOrWhiteSpace(gpu.Name) ? $"GPU{i}" : gpu.Name;
+                item.LoadPercent = percent;
+                item.LoadArcData = GpuRingStatusItem.BuildArcPathData(percent);
+                var memoryPercent = ResolveMemoryPercent(gpu.MemoryUsedMb, gpu.MemoryTotalMb);
+                item.MemoryPercent = memoryPercent;
+                item.MemoryArcData = GpuRingStatusItem.BuildArcPathData(memoryPercent);
+                item.LoadRingColor = "#6EC1FF";
+                item.MemoryRingColor = "#4ADE80";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("刷新顶部显卡状态失败", ex);
+            CpuStatusItem.DisplayName = string.Empty;
+            CpuStatusItem.DetailedName = string.Empty;
+            CpuStatusItem.LoadPercent = 0;
+            CpuStatusItem.LoadArcData = string.Empty;
+            CpuStatusItem.MemoryPercent = 0;
+            CpuStatusItem.MemoryArcData = string.Empty;
+            GpuStatusItems.Clear();
+        }
+    }
+
+    private static double ResolveGpuUsagePercent(GpuInfoSnapshot gpu)
+    {
+        if (gpu.LoadPercent.HasValue)
+        {
+            return Math.Clamp(gpu.LoadPercent.Value, 0, 100);
+        }
+
+        if (gpu.MemoryUsedMb.HasValue && gpu.MemoryTotalMb.HasValue && gpu.MemoryTotalMb.Value > 0)
+        {
+            return Math.Clamp(gpu.MemoryUsedMb.Value * 100.0 / gpu.MemoryTotalMb.Value, 0, 100);
+        }
+
+        return 0;
+    }
+
+    private static double ResolveMemoryPercent(double? usedMb, double? totalMb)
+    {
+        if (!usedMb.HasValue || !totalMb.HasValue || totalMb.Value <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp(usedMb.Value * 100.0 / totalMb.Value, 0, 100);
+    }
+
     private void AddSystemRow(string key, string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -560,4 +678,64 @@ public class SystemDeviceItem
     public string Index { get; set; } = string.Empty;
     public string VramTotal { get; set; } = string.Empty;
     public string VramFree { get; set; } = string.Empty;
+}
+
+public partial class GpuRingStatusItem : ObservableObject
+{
+    [ObservableProperty]
+    private string _displayName = string.Empty;
+
+    [ObservableProperty]
+    private string _detailedName = string.Empty;
+
+    [ObservableProperty]
+    private double _loadPercent;
+
+    [ObservableProperty]
+    private string _loadArcData = string.Empty;
+
+    [ObservableProperty]
+    private double _memoryPercent;
+
+    [ObservableProperty]
+    private string _memoryArcData = string.Empty;
+
+    [ObservableProperty]
+    private string _loadRingColor = "#6EC1FF";
+
+    [ObservableProperty]
+    private string _memoryRingColor = "#4ADE80";
+
+    public string LoadPercentText => $"{LoadPercent:F0}%";
+    public string MemoryPercentText => $"{MemoryPercent:F0}%";
+
+    partial void OnLoadPercentChanged(double value)
+    {
+        OnPropertyChanged(nameof(LoadPercentText));
+    }
+
+    partial void OnMemoryPercentChanged(double value)
+    {
+        OnPropertyChanged(nameof(MemoryPercentText));
+    }
+
+    public static string BuildArcPathData(double percent)
+    {
+        if (percent <= 0)
+        {
+            return string.Empty;
+        }
+
+        if (percent >= 99.9)
+        {
+            return "M 20,5 A 15,15 0 1 1 20,35 A 15,15 0 1 1 20,5";
+        }
+
+        var angle = percent / 100.0 * 360.0;
+        var radians = angle * Math.PI / 180.0;
+        var endX = 20 + 15 * Math.Sin(radians);
+        var endY = 20 - 15 * Math.Cos(radians);
+        var largeArcFlag = angle > 180 ? 1 : 0;
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, "M 20,5 A 15,15 0 {0} 1 {1:F2},{2:F2}", largeArcFlag, endX, endY);
+    }
 }

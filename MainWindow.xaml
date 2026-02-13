@@ -130,6 +130,128 @@
                                    MaxWidth="400"/>
                     </StackPanel>
 
+                    <!-- Center: CPU + Multi-GPU Rings -->
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CpuStatusItem.DisplayName}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="8,0"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CpuStatusItem.DisplayName}"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="#FFD4A3"
+                                       Margin="0,0,6,0"/>
+                            <Grid Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,4,0">
+                                <Grid.ToolTip>
+                                    <ToolTip Content="{Binding CpuStatusItem.DetailedName, StringFormat=CPU占用 | {0}}"/>
+                                </Grid.ToolTip>
+                                <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
+                                <Path Data="{Binding CpuStatusItem.LoadArcData}"
+                                      Stroke="{Binding CpuStatusItem.LoadRingColor}"
+                                      StrokeThickness="4"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Fill="Transparent"/>
+                                <TextBlock Text="{Binding CpuStatusItem.LoadPercentText}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FFE7C9"/>
+                            </Grid>
+                            <Grid Width="40" Height="40" VerticalAlignment="Center">
+                                <Grid.ToolTip>
+                                    <ToolTip Content="{Binding CpuStatusItem.DetailedName, StringFormat=内存占用 | {0}}"/>
+                                </Grid.ToolTip>
+                                <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
+                                <Path Data="{Binding CpuStatusItem.MemoryArcData}"
+                                      Stroke="{Binding CpuStatusItem.MemoryRingColor}"
+                                      StrokeThickness="4"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Fill="Transparent"/>
+                                <TextBlock Text="{Binding CpuStatusItem.MemoryPercentText}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"
+                                           Foreground="#F0DAFF"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding GpuStatusItems}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                Margin="8,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DisplayName}"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="10"
+                                                   Foreground="#A8CFFF"
+                                                   Margin="0,0,6,0"/>
+                                        <Grid Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,4,0">
+                                            <Grid.ToolTip>
+                                                <ToolTip Content="{Binding DetailedName, StringFormat=GPU占用 | {0}}"/>
+                                            </Grid.ToolTip>
+                                            <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
+                                            <Path Data="{Binding LoadArcData}"
+                                                  Stroke="{Binding LoadRingColor}"
+                                                  StrokeThickness="4"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  Fill="Transparent"/>
+                                            <TextBlock Text="{Binding LoadPercentText}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="9"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#DDEEFF"/>
+                                        </Grid>
+                                        <Grid Width="40" Height="40" VerticalAlignment="Center">
+                                            <Grid.ToolTip>
+                                                <ToolTip Content="{Binding DetailedName, StringFormat=显存占用 | {0}}"/>
+                                            </Grid.ToolTip>
+                                            <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
+                                            <Path Data="{Binding MemoryArcData}"
+                                                  Stroke="{Binding MemoryRingColor}"
+                                                  StrokeThickness="4"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  Fill="Transparent"/>
+                                            <TextBlock Text="{Binding MemoryPercentText}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="9"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#D9FFE5"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
                     <!-- Right: Action Buttons -->
                     <StackPanel Grid.Column="3" Orientation="Horizontal">
                         <Button Command="{Binding OpenWebPageCommand}"
@@ -183,7 +305,13 @@
             <Border Grid.Row="2" Padding="16,8"
                     Background="#0A0A0A">
                 <Grid>
-                    <StackPanel Orientation="Horizontal">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
                         <Border Background="Transparent" Padding="2,0">
                             <Border.ToolTip>
                                 <ToolTip Placement="Top"
@@ -311,7 +439,8 @@
                             </TextBlock.Style>
                         </TextBlock>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                          <TextBlock Text="{Binding AppVersionText}" Opacity="0.6" VerticalAlignment="Center" FontSize="12"/>
                     </StackPanel>
                 </Grid>
