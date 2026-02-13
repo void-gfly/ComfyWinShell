@@ -335,12 +335,19 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _appName = "LAUNCHER";
 
+    [ObservableProperty]
+    private string _appVersionText = "v1.0.0";
+
     private void UpdateAppTitle(AppSettings settings)
     {
         var title = string.IsNullOrWhiteSpace(settings.AppName) ? "ComfyShell" : settings.AppName;
         AppName = string.IsNullOrWhiteSpace(settings.AppName) ? "LAUNCHER" : settings.AppName;
         
-        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        var assemblyVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var version = assemblyVersion == null
+            ? "1.0.0"
+            : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{Math.Max(0, assemblyVersion.Build)}";
+        AppVersionText = $"v{version}";
         AppTitle = $"{title}  {VersionName} v{version}";
     }
 

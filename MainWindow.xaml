@@ -312,7 +312,7 @@
                         </TextBlock>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                         <TextBlock Text="v1.0.0" Opacity="0.6" VerticalAlignment="Center" FontSize="12"/>
+                         <TextBlock Text="{Binding AppVersionText}" Opacity="0.6" VerticalAlignment="Center" FontSize="12"/>
                     </StackPanel>
                 </Grid>
             </Border>

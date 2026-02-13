@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^dotnet build WpfDesktop\\.csproj$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
