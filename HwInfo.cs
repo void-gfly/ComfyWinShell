@@ -87,7 +87,7 @@ namespace WpfDesktop.Services
             var cpuTemp = SelectTemperature(cpuSensors);
             var cpuFan = SelectFanRpm(cpuSensors, "cpu") ?? SelectFanRpm(motherboardSensors, "cpu");
 
-            var (memUsed, memTotal) = SelectMemoryUsage(memorySensors);
+            var (memUsed, memTotal) = SelectMemoryUsage(memorySensors, preferPhysicalMemory: true);
 
             // 收集每个 GPU 的信息
             var gpus = new List<GpuInfoSnapshot>();
@@ -237,8 +237,17 @@ namespace WpfDesktop.Services
             return values.Max();
         }
 
-        private (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors)
+        private (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors, bool preferPhysicalMemory = false)
         {
+            if (preferPhysicalMemory)
+            {
+                var physical = GetMemoryFromWindowsAPI();
+                if (physical.used.HasValue && physical.total.HasValue)
+                {
+                    return NormalizeMemoryValues(physical.used, physical.total);
+                }
+            }
+
             // 扩展传感器名称匹配范围，提高兼容性
             var used = FindDataValue(sensors, 
                 "memory used", "used", "memory usage", 
