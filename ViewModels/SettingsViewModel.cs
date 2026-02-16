@@ -31,6 +31,13 @@ public partial class SettingsViewModel : ViewModelBase
 
     public IReadOnlyList<string> ThemeOptions { get; } = new[] { "Dark" };
 
+    public IReadOnlyList<ConsoleLineHeightOption> LogLineHeightOptions { get; } = new[]
+    {
+        new ConsoleLineHeightOption("紧凑", 12),
+        new ConsoleLineHeightOption("默认", 15),
+        new ConsoleLineHeightOption("宽松", 18)
+    };
+
     private async Task LoadAsync()
     {
         IsLoading = true;
@@ -61,4 +68,16 @@ public partial class SettingsViewModel : ViewModelBase
             SaveCommand.NotifyCanExecuteChanged();
         }
     }
+}
+
+public sealed class ConsoleLineHeightOption
+{
+    public ConsoleLineHeightOption(string label, int value)
+    {
+        Label = label;
+        Value = value;
+    }
+
+    public string Label { get; }
+    public int Value { get; }
 }

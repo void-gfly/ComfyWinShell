@@ -69,6 +69,8 @@ public partial class MainViewModel : ViewModelBase
     public IAsyncRelayCommand ToggleProcessCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
     public IRelayCommand OpenWebPageCommand { get; }
+    public string WebUiBaseUrl => $"http://{_currentConfiguration?.Network.Listen ?? "127.0.0.1"}:{_currentConfiguration?.Network.Port ?? 8188}";
+    public string OpenWebPageToolTip => $"在浏览器打开 {WebUiBaseUrl} (ComfyUI WebUI BaseUrl)";
 
     public MainViewModel(
         DashboardViewModel dashboardViewModel,
@@ -186,6 +188,8 @@ public partial class MainViewModel : ViewModelBase
             _activeProfileId = defaultProfile?.Id ?? DefaultProfileId;
             _currentConfiguration = await _configurationService.LoadConfigurationAsync(_activeProfileId);
             _processService.ConfigureApiEndpoint(_currentConfiguration.Network.Listen, _currentConfiguration.Network.Port);
+            OnPropertyChanged(nameof(WebUiBaseUrl));
+            OnPropertyChanged(nameof(OpenWebPageToolTip));
 
             if (!_startupCleanupCompleted && _comfyPathService.IsValid && !string.IsNullOrWhiteSpace(_comfyPathService.ComfyRootPath))
             {
@@ -370,10 +374,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void OpenWebPage()
     {
-        var listen = _currentConfiguration?.Network.Listen ?? "127.0.0.1";
-        var port = _currentConfiguration?.Network.Port ?? 8188;
-        var url = $"http://{listen}:{port}";
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(WebUiBaseUrl) { UseShellExecute = true });
     }
 
     private static void RunOnUiThread(Action action)
@@ -516,8 +517,10 @@ public partial class MainViewModel : ViewModelBase
             CpuStatusItem.DetailedName = string.IsNullOrWhiteSpace(snapshot.CpuName) ? "CPU" : snapshot.CpuName;
             CpuStatusItem.LoadPercent = cpuPercent;
             CpuStatusItem.LoadArcData = GpuRingStatusItem.BuildArcPathData(cpuPercent);
+            CpuStatusItem.LoadTooltipValue = $"{cpuPercent:F0}%";
             CpuStatusItem.MemoryPercent = cpuMemoryPercent;
             CpuStatusItem.MemoryArcData = GpuRingStatusItem.BuildArcPathData(cpuMemoryPercent);
+            CpuStatusItem.MemoryTooltipValue = FormatMemoryPair(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);
             CpuStatusItem.LoadRingColor = "#F6A23A";
             CpuStatusItem.MemoryRingColor = "#C084FC";
 
@@ -541,8 +544,10 @@ public partial class MainViewModel : ViewModelBase
                         DetailedName = string.IsNullOrWhiteSpace(gpu.Name) ? $"GPU{i}" : gpu.Name,
                         LoadPercent = percent,
                         LoadArcData = GpuRingStatusItem.BuildArcPathData(percent),
+                        LoadTooltipValue = $"{percent:F0}%",
                         MemoryPercent = ResolveMemoryPercent(gpu.MemoryUsedMb, gpu.MemoryTotalMb),
                         MemoryArcData = GpuRingStatusItem.BuildArcPathData(ResolveMemoryPercent(gpu.MemoryUsedMb, gpu.MemoryTotalMb)),
+                        MemoryTooltipValue = FormatMemoryPair(gpu.MemoryUsedMb, gpu.MemoryTotalMb),
                         LoadRingColor = "#6EC1FF",
                         MemoryRingColor = "#4ADE80"
                     });
@@ -560,9 +565,11 @@ public partial class MainViewModel : ViewModelBase
                 item.DetailedName = string.IsNullOrWhiteSpace(gpu.Name) ? $"GPU{i}" : gpu.Name;
                 item.LoadPercent = percent;
                 item.LoadArcData = GpuRingStatusItem.BuildArcPathData(percent);
+                item.LoadTooltipValue = $"{percent:F0}%";
                 var memoryPercent = ResolveMemoryPercent(gpu.MemoryUsedMb, gpu.MemoryTotalMb);
                 item.MemoryPercent = memoryPercent;
                 item.MemoryArcData = GpuRingStatusItem.BuildArcPathData(memoryPercent);
+                item.MemoryTooltipValue = FormatMemoryPair(gpu.MemoryUsedMb, gpu.MemoryTotalMb);
                 item.LoadRingColor = "#6EC1FF";
                 item.MemoryRingColor = "#4ADE80";
             }
@@ -574,8 +581,10 @@ public partial class MainViewModel : ViewModelBase
             CpuStatusItem.DetailedName = string.Empty;
             CpuStatusItem.LoadPercent = 0;
             CpuStatusItem.LoadArcData = string.Empty;
+            CpuStatusItem.LoadTooltipValue = "--";
             CpuStatusItem.MemoryPercent = 0;
             CpuStatusItem.MemoryArcData = string.Empty;
+            CpuStatusItem.MemoryTooltipValue = "--";
             GpuStatusItems.Clear();
         }
     }
@@ -603,6 +612,27 @@ public partial class MainViewModel : ViewModelBase
         }
 
         return Math.Clamp(usedMb.Value * 100.0 / totalMb.Value, 0, 100);
+    }
+
+    private static string FormatMemoryPair(double? usedMb, double? totalMb)
+    {
+        if (!usedMb.HasValue || !totalMb.HasValue || totalMb.Value <= 0)
+        {
+            return "--";
+        }
+
+        return $"{FormatGbCompact(usedMb.Value / 1024.0)}/{FormatGbCompact(totalMb.Value / 1024.0)}";
+    }
+
+    private static string FormatGbCompact(double gb)
+    {
+        var rounded = Math.Round(gb, 1);
+        if (Math.Abs(rounded - Math.Round(rounded)) < 0.0001)
+        {
+            return $"{Math.Round(rounded):F0}G";
+        }
+
+        return $"{rounded:F1}G";
     }
 
     private void AddSystemRow(string key, string? value)
@@ -705,6 +735,12 @@ public partial class GpuRingStatusItem : ObservableObject
 
     [ObservableProperty]
     private string _memoryRingColor = "#4ADE80";
+
+    [ObservableProperty]
+    private string _loadTooltipValue = "0%";
+
+    [ObservableProperty]
+    private string _memoryTooltipValue = "--";
 
     public string LoadPercentText => $"{LoadPercent:F0}%";
     public string MemoryPercentText => $"{MemoryPercent:F0}%";

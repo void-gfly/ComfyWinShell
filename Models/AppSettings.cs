@@ -6,6 +6,11 @@ public class AppSettings
     public string Theme { get; set; } = "Dark";
     public string PythonRoot { get; set; } = "";
     public int MaxLogLines { get; set; } = 5000;
+    
+    /// <summary>
+    /// 控制台日志行高（紧凑=12，默认=15，宽松=18）
+    /// </summary>
+    public int LogLineHeight { get; set; } = 15;
 
     /// <summary>
     /// 数据存储根目录

@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -50,6 +51,11 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         _processService.OutputReceived += OnOutputReceived;
         // 只订阅 LogEntryReceived，避免与 LogReceived 重复（两者同时触发）
         _logService.LogEntryReceived += OnLogEntryReceived;
+        WeakReferenceMessenger.Default.Register<AppSettingsChangedMessage>(this, (_, message) =>
+        {
+            _maxLogLines = message.Value.MaxLogLines > 0 ? message.Value.MaxLogLines : 5000;
+            LogLineHeight = ResolveLogLineHeight(message.Value.LogLineHeight);
+        });
 
         _ = InitializeAsync();
     }
@@ -58,6 +64,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     {
         var settings = await _settingsService.LoadAsync();
         _maxLogLines = settings.MaxLogLines > 0 ? settings.MaxLogLines : 5000;
+        LogLineHeight = ResolveLogLineHeight(settings.LogLineHeight);
         await RefreshAsync();
     }
 
@@ -79,6 +86,9 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _autoScroll = true;
+
+    [ObservableProperty]
+    private double _logLineHeight = 15;
 
     /// <summary>
     /// 用于在页面切换时保存滚动条位置
@@ -340,5 +350,10 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         }
 
         _ = dispatcher.BeginInvoke(action);
+    }
+
+    private static double ResolveLogLineHeight(int value)
+    {
+        return value is 12 or 15 or 18 ? value : 15;
     }
 }

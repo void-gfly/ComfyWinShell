@@ -69,6 +69,14 @@
                      SelectionMode="Extended"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      Padding="8">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="复制选中日志"
@@ -86,7 +94,8 @@
                                    TextWrapping="Wrap"
                                    FontFamily="Consolas, Courier New, Monospace"
                                    FontSize="13"
-                                   LineHeight="20"/>
+                                   LineStackingStrategy="BlockLineHeight"
+                                   LineHeight="{Binding DataContext.LogLineHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

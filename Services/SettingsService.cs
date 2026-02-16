@@ -35,11 +35,19 @@ public class SettingsService : ISettingsService
             return _current;
         }
 
-        await using var stream = File.OpenRead(_settingsFilePath);
-        var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, _serializerOptions);
+        var json = await File.ReadAllTextAsync(_settingsFilePath);
+        var settings = JsonSerializer.Deserialize<AppSettings>(json, _serializerOptions);
         if (settings != null)
         {
             _current = settings;
+        }
+
+        // 兼容旧配置：缺少新字段时自动补默认值并回写
+        var lineHeightExists = HasTopLevelProperty(json, "LogLineHeight");
+        var normalized = NormalizeSettings(_current);
+        if (!lineHeightExists || normalized)
+        {
+            await SaveAsync(_current);
         }
 
         return _current;
@@ -50,5 +58,45 @@ public class SettingsService : ISettingsService
         _current = settings;
         await using var stream = File.Create(_settingsFilePath);
         await JsonSerializer.SerializeAsync(stream, settings, _serializerOptions);
+    }
+
+    private static bool HasTopLevelProperty(string json, string propertyName)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool NormalizeSettings(AppSettings settings)
+    {
+        var changed = false;
+
+        // 仅允许三档预设值，其他值回退为默认
+        if (settings.LogLineHeight is not (12 or 15 or 18))
+        {
+            settings.LogLineHeight = 15;
+            changed = true;
+        }
+
+        return changed;
     }
 }

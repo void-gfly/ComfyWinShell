@@ -201,6 +201,15 @@
                                      Width="150" HorizontalAlignment="Left"
                                      VerticalContentAlignment="Center"/>
                             <TextBlock Text="控制台输出保留的最大行数，超出后自动删除旧日志。默认 5000 行。"
+                                       FontSize="12" Opacity="0.5" Margin="0,6,0,16"/>
+
+                            <TextBlock Text="输出文本间距" FontSize="14" FontWeight="Medium" Opacity="0.7" Margin="0,0,0,8"/>
+                            <ComboBox ItemsSource="{Binding LogLineHeightOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding Settings.LogLineHeight, UpdateSourceTrigger=PropertyChanged}"
+                                      Width="150" HorizontalAlignment="Left"/>
+                            <TextBlock Text="控制台日志行高：紧凑=12，默认=15，宽松=18。"
                                        FontSize="12" Opacity="0.5" Margin="0,6,0,0"/>
                         </StackPanel>
                     </Border>

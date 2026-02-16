@@ -156,7 +156,12 @@
                                        Margin="0,0,6,0"/>
                             <Grid Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,4,0">
                                 <Grid.ToolTip>
-                                    <ToolTip Content="{Binding CpuStatusItem.DetailedName, StringFormat=CPU占用 | {0}}"/>
+                                    <ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding CpuStatusItem.DetailedName}"/>
+                                            <TextBlock Text="{Binding CpuStatusItem.LoadTooltipValue}" Opacity="0.8"/>
+                                        </StackPanel>
+                                    </ToolTip>
                                 </Grid.ToolTip>
                                 <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
                                 <Path Data="{Binding CpuStatusItem.LoadArcData}"
@@ -174,7 +179,12 @@
                             </Grid>
                             <Grid Width="40" Height="40" VerticalAlignment="Center">
                                 <Grid.ToolTip>
-                                    <ToolTip Content="{Binding CpuStatusItem.DetailedName, StringFormat=内存占用 | {0}}"/>
+                                    <ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding CpuStatusItem.DetailedName}"/>
+                                            <TextBlock Text="{Binding CpuStatusItem.MemoryTooltipValue}" Opacity="0.8"/>
+                                        </StackPanel>
+                                    </ToolTip>
                                 </Grid.ToolTip>
                                 <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
                                 <Path Data="{Binding CpuStatusItem.MemoryArcData}"
@@ -212,7 +222,12 @@
                                                    Margin="0,0,6,0"/>
                                         <Grid Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,4,0">
                                             <Grid.ToolTip>
-                                                <ToolTip Content="{Binding DetailedName, StringFormat=GPU占用 | {0}}"/>
+                                                <ToolTip>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding DetailedName}"/>
+                                                        <TextBlock Text="{Binding LoadTooltipValue}" Opacity="0.8"/>
+                                                    </StackPanel>
+                                                </ToolTip>
                                             </Grid.ToolTip>
                                             <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
                                             <Path Data="{Binding LoadArcData}"
@@ -230,7 +245,12 @@
                                         </Grid>
                                         <Grid Width="40" Height="40" VerticalAlignment="Center">
                                             <Grid.ToolTip>
-                                                <ToolTip Content="{Binding DetailedName, StringFormat=显存占用 | {0}}"/>
+                                                <ToolTip>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding DetailedName}"/>
+                                                        <TextBlock Text="{Binding MemoryTooltipValue}" Opacity="0.8"/>
+                                                    </StackPanel>
+                                                </ToolTip>
                                             </Grid.ToolTip>
                                             <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
                                             <Path Data="{Binding MemoryArcData}"
@@ -256,6 +276,7 @@
                     <StackPanel Grid.Column="3" Orientation="Horizontal">
                         <Button Command="{Binding OpenWebPageCommand}"
                                 Content="打开"
+                                ToolTip="{Binding OpenWebPageToolTip}"
                                 Margin="0,0,10,0"
                                 Style="{DynamicResource SecondaryButtonStyle}"/>
                         <Button Command="{Binding ToggleProcessCommand}"
