@@ -16,12 +16,16 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
 {
     private readonly IComfyPathService _comfyPathService;
     private readonly IPythonPathService _pythonPathService;
+    private readonly IResourceService _resourceService;
     private readonly ILogService _logService;
 
     // 已安装节点缓存
     private HashSet<string>? _installedNodesCache;
     private Dictionary<string, string>? _nodeToPackageCache;
     private Dictionary<string, string>? _displayNameToTypeCache;
+
+    // 扩展模型目录缓存: key=模型类型名(如"checkpoints","loras"), value=绝对目录路径列表
+    private IReadOnlyList<ModelFolderInfo>? _extraModelFoldersCache;
 
     /// <summary>
     /// 模型加载器配置映射
@@ -181,10 +185,12 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     public WorkflowAnalyzerService(
         IComfyPathService comfyPathService, 
         IPythonPathService pythonPathService,
+        IResourceService resourceService,
         ILogService logService)
     {
         _comfyPathService = comfyPathService;
         _pythonPathService = pythonPathService;
+        _resourceService = resourceService;
         _logService = logService;
     }
 
@@ -1109,7 +1115,7 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 查找模型文件（支持多个可能的目录 + 全局递归搜索）
+    /// 查找模型文件（支持多个可能的目录 + 扩展模型目录 + 全局递归搜索）
     /// </summary>
     private void FindModelFile(RequiredModel model, string modelDir)
     {
@@ -1169,9 +1175,122 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
             _logService.Log($"递归搜索模型失败: {model.ModelName}, {ex.Message}");
         }
 
+        // 第三步：在扩展模型目录中搜索（extra_model_paths.yaml 配置的目录）
+        try
+        {
+            var extraFolders = GetExtraModelFolders();
+            if (extraFolders.Count > 0)
+            {
+                // 优先搜索与 modelDir 同名的扩展目录
+                foreach (var folder in extraFolders.Where(f => 
+                    string.Equals(f.Name, modelDir, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var fullPath = Path.Combine(folder.Path, model.ModelName);
+                    if (File.Exists(fullPath))
+                    {
+                        SetModelFound(model, fullPath, modelDir);
+                        return;
+                    }
+                    
+                    // 在该扩展目录中递归搜索
+                    if (Directory.Exists(folder.Path))
+                    {
+                        var foundPath = SearchModelRecursively(folder.Path, model.ModelName);
+                        if (foundPath != null)
+                        {
+                            // 扩展目录中找到：使用 modelDir 作为逻辑分类，保持打包时的目标路径一致
+                            var relativePath = Path.GetRelativePath(folder.Path, foundPath);
+                            var relativeDir = Path.GetDirectoryName(relativePath)?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
+                            var logicalDir = string.IsNullOrEmpty(relativeDir) ? modelDir : $"{modelDir}/{relativeDir}";
+                            
+                            SetModelFound(model, foundPath, logicalDir);
+                            return;
+                        }
+                    }
+                }
+
+                // 搜索备用目录名对应的扩展目录
+                foreach (var altDir in searchDirs.Skip(1))
+                {
+                    foreach (var folder in extraFolders.Where(f => 
+                        string.Equals(f.Name, altDir, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var fullPath = Path.Combine(folder.Path, model.ModelName);
+                        if (File.Exists(fullPath))
+                        {
+                            SetModelFound(model, fullPath, altDir);
+                            return;
+                        }
+
+                        if (Directory.Exists(folder.Path))
+                        {
+                            var foundPath = SearchModelRecursively(folder.Path, model.ModelName);
+                            if (foundPath != null)
+                            {
+                                var relativePath = Path.GetRelativePath(folder.Path, foundPath);
+                                var relativeDir = Path.GetDirectoryName(relativePath)?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
+                                var logicalDir = string.IsNullOrEmpty(relativeDir) ? altDir : $"{altDir}/{relativeDir}";
+                                
+                                SetModelFound(model, foundPath, logicalDir);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // 在所有扩展目录中全局搜索
+                foreach (var folder in extraFolders)
+                {
+                    // 跳过已搜索过的目录
+                    if (searchDirs.Any(d => string.Equals(d, folder.Name, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+
+                    if (Directory.Exists(folder.Path))
+                    {
+                        var foundPath = SearchModelRecursively(folder.Path, model.ModelName);
+                        if (foundPath != null)
+                        {
+                            // 使用扩展目录的名称作为模型分类
+                            var relativePath = Path.GetRelativePath(folder.Path, foundPath);
+                            var relativeDir = Path.GetDirectoryName(relativePath)?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
+                            var logicalDir = string.IsNullOrEmpty(relativeDir) ? folder.Name : $"{folder.Name}/{relativeDir}";
+                            
+                            SetModelFound(model, foundPath, logicalDir);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.Log($"搜索扩展模型目录失败: {model.ModelName}, {ex.Message}");
+        }
+
         // 文件未找到，设置默认完整路径（使用主目录）
         model.Exists = false;
         model.FullPath = Path.Combine(comfyModelsPath, modelDir, model.ModelName);
+    }
+
+    /// <summary>
+    /// 获取扩展模型目录列表（带缓存）
+    /// </summary>
+    private IReadOnlyList<ModelFolderInfo> GetExtraModelFolders()
+    {
+        if (_extraModelFoldersCache != null)
+            return _extraModelFoldersCache;
+
+        try
+        {
+            _extraModelFoldersCache = _resourceService.GetExtraModelFoldersAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logService.Log($"获取扩展模型目录失败: {ex.Message}");
+            _extraModelFoldersCache = Array.Empty<ModelFolderInfo>();
+        }
+
+        return _extraModelFoldersCache;
     }
 
     /// <summary>

@@ -55,9 +55,16 @@
                 <TextBlock Foreground="#CCCCCC" FontSize="13" Margin="0,4,0,0">
                     <Run Text="缺失节点: " FontWeight="SemiBold"/>
                     <Run Text="{Binding MissingNodeCount}" Foreground="{Binding MissingNodeCountColor}"/>
+                    <Run Text=" (不影响打包)" Foreground="#888888" FontSize="11"/>
                     <Run Text=" | 缺失模型: " FontWeight="SemiBold"/>
                     <Run Text="{Binding MissingModelCount}" Foreground="{Binding MissingModelCountColor}"/>
                 </TextBlock>
+                <CheckBox Content="忽略缺失模型，继续打包"
+                          IsChecked="{Binding IgnoreMissingModels}"
+                          Foreground="#FFB300"
+                          FontSize="12"
+                          Margin="0,6,0,0"
+                          Visibility="{Binding ShowIgnoreMissingModels, Converter={StaticResource BoolToVisibilityConverter}}"/>
             </StackPanel>
         </Border>
 

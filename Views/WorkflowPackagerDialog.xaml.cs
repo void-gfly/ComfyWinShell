@@ -76,8 +76,20 @@ public partial class WorkflowPackagerDialog : Window, INotifyPropertyChanged
     public int MissingModelCount
     {
         get => _missingModelCount;
-        set { _missingModelCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(MissingModelCountColor)); }
+        set { _missingModelCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(MissingModelCountColor)); OnPropertyChanged(nameof(ShowIgnoreMissingModels)); }
     }
+
+    private bool _ignoreMissingModels;
+    public bool IgnoreMissingModels
+    {
+        get => _ignoreMissingModels;
+        set { _ignoreMissingModels = value; OnPropertyChanged(); UpdateCanStartPackage(); }
+    }
+
+    /// <summary>
+    /// 仅在存在缺失模型时显示忽略选项
+    /// </summary>
+    public bool ShowIgnoreMissingModels => MissingModelCount > 0;
 
     public Brush MissingNodeCountColor => MissingNodeCount > 0
         ? new SolidColorBrush(Color.FromRgb(220, 53, 69))  // #DC3545 红色
@@ -227,25 +239,25 @@ public partial class WorkflowPackagerDialog : Window, INotifyPropertyChanged
 
     private void CheckPackageReadiness()
     {
-        if (MissingNodeCount > 0 || MissingModelCount > 0)
+        if (MissingModelCount > 0)
         {
-            StatusMessage = "⚠️ 警告: 工作流存在缺失资源，无法打包！请先安装所有依赖。";
+            StatusMessage = "⚠️ 警告: 工作流存在缺失模型，可勾选\"忽略缺失模型\"跳过。";
             AddLog("⚠️ 检测到缺失资源:");
-            if (MissingNodeCount > 0)
-            {
-                AddLog($"   - 缺失节点: {MissingNodeCount} 个");
-            }
             if (MissingModelCount > 0)
             {
                 AddLog($"   - 缺失模型: {MissingModelCount} 个");
             }
-            AddLog("请返回工作流分析窗口查看详情，并先安装所有缺失的资源。");
+            if (MissingNodeCount > 0)
+            {
+                AddLog($"   ℹ️ 缺失节点: {MissingNodeCount} 个 (不影响打包)");
+            }
+            AddLog("可勾选\"忽略缺失模型\"跳过缺失模型继续打包，或返回工作流分析窗口查看详情。");
         }
         else
         {
-            StatusMessage = "✅ 资源检查通过，可以开始打包。";
-            AddLog("✅ 资源检查通过");
-            AddLog($"   - 节点: {TotalNodeCount} 个 (全部已安装)");
+            StatusMessage = "✅ 模型检查通过，可以开始打包。";
+            AddLog("✅ 模型检查通过");
+            AddLog($"   - 节点: {TotalNodeCount} 个" + (MissingNodeCount > 0 ? $" (缺失 {MissingNodeCount} 个，不影响打包)" : " (全部已安装)"));
             AddLog($"   - 模型: {RequiredModelsCount} 个 (全部存在)");
             AddLog("");
             AddLog("请选择打包目标目录，然后点击\"开始打包\"按钮。");
@@ -326,8 +338,7 @@ public partial class WorkflowPackagerDialog : Window, INotifyPropertyChanged
     private void UpdateCanStartPackage()
     {
         CanStartPackage = !IsPackaging
-            && MissingNodeCount == 0
-            && MissingModelCount == 0
+            && (MissingModelCount == 0 || IgnoreMissingModels)
             && !string.IsNullOrWhiteSpace(TargetPath);
     }
 

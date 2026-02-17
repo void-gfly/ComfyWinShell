@@ -176,7 +176,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     }
 
     /// <summary>
-    /// 复制工作流所需的模型
+    /// 复制工作流所需的模型（支持来自扩展模型目录的模型）
     /// </summary>
     private async Task<int> CopyRequiredModelsAsync(
         List<RequiredModel> requiredModels,
@@ -193,9 +193,9 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             {
                 try
                 {
-                    // 获取相对于 ComfyUI/models 的相对路径
-                    var sourceModelsPath = Path.Combine(comfyPath, "models");
-                    var relativePath = Path.GetRelativePath(sourceModelsPath, model.FullPath!);
+                    // 使用 ModelPath（逻辑相对路径，如 "checkpoints/model.safetensors"）
+                    // 而非从 ComfyUI/models 计算相对路径（扩展目录模型会生成错误的 ..\ 路径）
+                    var relativePath = model.ModelPath.Replace('/', Path.DirectorySeparatorChar);
 
                     // 构建目标路径
                     var targetModelPath = Path.Combine(targetModelsPath, relativePath);
