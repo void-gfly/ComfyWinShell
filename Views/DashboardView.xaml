@@ -40,6 +40,53 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
+
+        <!-- 快速访问按钮样式：图标在上，文字在下 -->
+        <Style x:Key="QuickAccessButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1A1A1A"/>
+            <Setter Property="Foreground" Value="#AAAAAA"/>
+            <Setter Property="BorderBrush" Value="#2C2C2C"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Width" Value="80"/>
+            <Setter Property="Height" Value="66"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock x:Name="icon"
+                                           Text="{TemplateBinding Tag}"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="20"
+                                           Foreground="{TemplateBinding Foreground}"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,5"/>
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#252525"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter TargetName="icon" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#111111"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="15,10">
@@ -156,16 +203,36 @@
                 <StackPanel>
                     <TextBlock Text="快速访问" Style="{StaticResource SectionTitleStyle}"/>
                     <WrapPanel Orientation="Horizontal">
-                        <Button Content="input 目录" Command="{Binding OpenFolderCommand}" CommandParameter="input"
-                                Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
-                        <Button Content="output 目录" Command="{Binding OpenFolderCommand}" CommandParameter="output"
-                                Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
-                        <Button Content="model 目录" Command="{Binding OpenFolderCommand}" CommandParameter="models"
-                                Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
-                        <Button Content="扩展Model" Command="{Binding OpenFolderCommand}" CommandParameter="extra-models"
-                                Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
-                        <Button Content="工作流目录" Command="{Binding OpenFolderCommand}" CommandParameter="user/default/workflows"
-                                Margin="0,0,8,8" Padding="12,5" FontSize="12"/>
+                        <!-- E8D4 = Import（导入/输入） -->
+                        <Button Tag="&#xE8D4;" Content="input 目录"
+                                Style="{StaticResource QuickAccessButtonStyle}"
+                                Command="{Binding OpenFolderCommand}" CommandParameter="input"
+                                Margin="0,0,8,8"/>
+                        <!-- E8DE = Export（导出/输出） -->
+                        <Button Tag="&#xE8DE;" Content="output 目录"
+                                Style="{StaticResource QuickAccessButtonStyle}"
+                                Command="{Binding OpenFolderCommand}" CommandParameter="output"
+                                Margin="0,0,8,8"/>
+                        <!-- EBD2 = Library（模型库） -->
+                        <Button Tag="&#xEBD2;" Content="model 目录"
+                                Style="{StaticResource QuickAccessButtonStyle}"
+                                Command="{Binding OpenFolderCommand}" CommandParameter="models"
+                                Margin="0,0,8,8"/>
+                        <!-- E8C0 = Storage（额外存储路径） -->
+                        <Button Tag="&#xE8C0;" Content="扩展Model"
+                                Style="{StaticResource QuickAccessButtonStyle}"
+                                Command="{Binding OpenFolderCommand}" CommandParameter="extra-models"
+                                Margin="0,0,8,8"/>
+                        <!-- E8C8 = NetworkTower（节点连接/工作流） -->
+                        <Button Tag="&#xE8C8;" Content="工作流目录"
+                                Style="{StaticResource QuickAccessButtonStyle}"
+                                Command="{Binding OpenFolderCommand}" CommandParameter="user/default/workflows"
+                                Margin="0,0,8,8"/>
+                        <!-- E912 = Code（自定义代码节点） -->
+                        <Button Tag="&#xE912;" Content="自定义节点"
+                                Style="{StaticResource QuickAccessButtonStyle}"
+                                Command="{Binding OpenFolderCommand}" CommandParameter="custom_nodes"
+                                Margin="0,0,8,8"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>

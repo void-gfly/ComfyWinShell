@@ -25,12 +25,14 @@ public partial class MainViewModel : ViewModelBase
     private readonly ISettingsService _settingsService;
     private readonly ILogService _logService;
     private readonly IHardwareMonitorService _hardwareMonitorService;
+    private readonly IEnvironmentCheckService _environmentCheckService;
     private readonly DispatcherTimer _gpuStatusTimer;
 
     private string _activeProfileId = DefaultProfileId;
     private ComfyConfiguration? _currentConfiguration;
     private bool _startupCleanupCompleted;
     private bool _startupExtraModelYamlSynced;
+    private bool _startupBannerLogged;
 
     [ObservableProperty]
     private string _appTitle = "ComfyShell";
@@ -87,6 +89,7 @@ public partial class MainViewModel : ViewModelBase
         IConfigurationService configurationService,
         ISettingsService settingsService,
         IHardwareMonitorService hardwareMonitorService,
+        IEnvironmentCheckService environmentCheckService,
         ILogService logService)
     {
         _processService = processService;
@@ -95,6 +98,7 @@ public partial class MainViewModel : ViewModelBase
         _configurationService = configurationService;
         _settingsService = settingsService;
         _hardwareMonitorService = hardwareMonitorService;
+        _environmentCheckService = environmentCheckService;
         _logService = logService;
 
         _viewModels = new Dictionary<string, ViewModelBase>(StringComparer.OrdinalIgnoreCase)
@@ -182,6 +186,14 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             _comfyPathService.Refresh();
+
+            if (!_startupBannerLogged)
+            {
+                _startupBannerLogged = true;
+                _ = _environmentCheckService.LogStartupBannerAsync(
+                    null,
+                    _comfyPathService.ComfyRootPath);
+            }
 
             var profiles = await _profileService.GetProfilesAsync();
             var defaultProfile = profiles.FirstOrDefault(profile => profile.IsDefault);

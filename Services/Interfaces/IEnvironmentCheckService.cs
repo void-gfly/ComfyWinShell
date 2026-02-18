@@ -19,6 +19,14 @@ public interface IEnvironmentCheckService
     /// <param name="pythonPath">Python 解释器路径（可选，如为空则使用系统 PATH）</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task<EnvironmentCheckResult> CheckAllAsync(string? pythonPath = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 向日志输出启动信息横幅（程序版本、Python、PyTorch、GPU）
+    /// </summary>
+    /// <param name="pythonPath">Python 解释器路径（可选，如为空则使用系统 PATH）</param>
+    /// <param name="comfyRootPath">ComfyUI 根目录路径（可选）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task LogStartupBannerAsync(string? pythonPath, string? comfyRootPath, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

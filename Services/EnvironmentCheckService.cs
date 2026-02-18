@@ -15,12 +15,14 @@ namespace WpfDesktop.Services;
 public sealed class EnvironmentCheckService : IEnvironmentCheckService
 {
     private readonly ILogService _logService;
+    private readonly IHardwareMonitorService _hardwareMonitorService;
 
     public event EventHandler<EnvironmentCheckEventArgs>? CheckProgressUpdated;
 
-    public EnvironmentCheckService(ILogService logService)
+    public EnvironmentCheckService(ILogService logService, IHardwareMonitorService hardwareMonitorService)
     {
         _logService = logService;
+        _hardwareMonitorService = hardwareMonitorService;
     }
 
     public async Task<EnvironmentCheckResult> CheckAllAsync(string? pythonPath = null, CancellationToken cancellationToken = default)
@@ -497,6 +499,222 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         {
             process.Dispose();
         }
+    }
+
+    /// <summary>
+    /// 输出启动信息横幅到日志，并行获取 Python/PyTorch/GPU/ComfyUI 版本
+    /// </summary>
+    public async Task LogStartupBannerAsync(string? pythonPath, string? comfyRootPath, CancellationToken cancellationToken = default)
+    {
+        var pythonExe = ResolveStartupPythonExecutable(pythonPath, comfyRootPath);
+        var comfyGitPath = ResolveComfyGitDirectory(comfyRootPath);
+        var (cpuInfo, cpuMemoryInfo, gpuInfoFromHw, gpuMemoryInfo) = GetHardwareInfoFromHwModule();
+
+        // 并行执行所有外部命令
+        var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var appVersionStr = appVersion is not null
+            ? $"v{appVersion.Major}.{appVersion.Minor}.{appVersion.Build}"
+            : "v?";
+
+        var pythonTask = RunCommandAsync(pythonExe, "--version", cancellationToken, timeoutSeconds: 10);
+        var pythonExecutableTask = RunCommandAsync(pythonExe, "-c \"import sys; print(sys.executable)\"", cancellationToken, timeoutSeconds: 10);
+        var torchTask = RunCommandAsync(pythonExe, "-c \"import torch,sys; sys.stdout.write(torch.__version__)\"", cancellationToken, timeoutSeconds: 30);
+        var comfyVersionTask = GetComfyVersionAsync(comfyGitPath, cancellationToken);
+
+        await Task.WhenAll(pythonTask, pythonExecutableTask, torchTask, comfyVersionTask);
+
+        var (pyExit, pyOut) = await pythonTask;
+        var (pyExeExit, pyExeOut) = await pythonExecutableTask;
+        var (torchExit, torchOut) = await torchTask;
+        var (comfyExit, comfyOut) = await comfyVersionTask;
+
+        var pythonVersion = pyExit == 0 ? ExtractPythonVersion(pyOut) : "未知";
+        var pythonExecutable = pyExeExit == 0 ? FirstNonEmptyLine(pyExeOut) : pythonExe;
+        var torchVersion = torchExit == 0 ? ExtractPyTorchVersion(torchOut) : "未安装";
+        var comfyVersion = comfyExit == 0 && !string.IsNullOrWhiteSpace(comfyOut)
+            ? FirstNonEmptyLine(comfyOut)
+            : "未知";
+        var comfyPath = !string.IsNullOrWhiteSpace(comfyRootPath) ? comfyRootPath : "未配置";
+        var gpuInfo = string.IsNullOrWhiteSpace(gpuInfoFromHw) ? await DetectGpuViaPyTorchAsync(pythonExe, cancellationToken) : gpuInfoFromHw;
+
+        var separator = "========================================";
+        _logService.Log(separator);
+        _logService.Log($" ComfyShell {appVersionStr}");
+        _logService.Log(separator);
+        _logService.Log($" ComfyUI 路径  : {comfyPath}");
+        _logService.Log($" ComfyUI 版本  : {comfyVersion}");
+        _logService.Log($" Python 路径   : {pythonExecutable}");
+        _logService.Log($" Python 版本   : {pythonVersion}");
+        _logService.Log($" PyTorch 版本  : {torchVersion}");
+        _logService.Log($" CPU           : {cpuInfo}");
+        _logService.Log($"   内存占用    : {cpuMemoryInfo}");
+        _logService.Log($" GPU           : {gpuInfo}");
+        _logService.Log($"   显存占用    : {gpuMemoryInfo}");
+        _logService.Log(separator);
+    }
+
+    private (string cpuInfo, string cpuMemoryInfo, string gpuInfo, string gpuMemoryInfo) GetHardwareInfoFromHwModule()
+    {
+        var snapshot = _hardwareMonitorService.GetSnapshot();
+
+        var cpuInfo = string.IsNullOrWhiteSpace(snapshot.CpuName) ? "未知 CPU" : snapshot.CpuName;
+        var cpuMemoryInfo = FormatUsage(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);
+        if (snapshot.Gpus.Count == 0)
+        {
+            return (cpuInfo, cpuMemoryInfo, "未检测到 GPU", "未知");
+        }
+
+        var gpuNames = snapshot.Gpus
+            .Select(g => g.Name?.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var gpuMemoryInfo = string.Join(" | ", snapshot.Gpus
+            .Select(g =>
+            {
+                var name = string.IsNullOrWhiteSpace(g.Name) ? "GPU" : g.Name.Trim();
+                return $"{name}: {FormatUsage(g.MemoryUsedMb, g.MemoryTotalMb)}";
+            }));
+
+        if (gpuNames.Length == 0)
+        {
+            return (cpuInfo, cpuMemoryInfo, "未检测到 GPU", gpuMemoryInfo);
+        }
+
+        return (cpuInfo, cpuMemoryInfo, string.Join(" | ", gpuNames), gpuMemoryInfo);
+    }
+
+    private static string FormatUsage(double? usedMb, double? totalMb)
+    {
+        if (!usedMb.HasValue || !totalMb.HasValue || totalMb.Value <= 0)
+        {
+            return "未知";
+        }
+
+        var usedGb = usedMb.Value / 1024.0;
+        var totalGb = totalMb.Value / 1024.0;
+        return $"{usedGb:F1} GB / {totalGb:F1} GB";
+    }
+
+    private static string ResolveStartupPythonExecutable(string? pythonPath, string? comfyRootPath)
+    {
+        if (!string.IsNullOrWhiteSpace(pythonPath))
+        {
+            return GetPythonExecutable(pythonPath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(comfyRootPath))
+        {
+            var candidates = new[]
+            {
+                Path.Combine(comfyRootPath, "python_embeded", "python.exe"),
+                Path.Combine(comfyRootPath, "python", "python.exe"),
+                Path.Combine(comfyRootPath, "venv", "Scripts", "python.exe")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return "python";
+    }
+
+    private static string? ResolveComfyGitDirectory(string? comfyRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(comfyRootPath))
+        {
+            return null;
+        }
+
+        var candidates = new[]
+        {
+            Path.Combine(comfyRootPath, "ComfyUI"),
+            comfyRootPath
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var gitDir = Path.Combine(candidate, ".git");
+            if (Directory.Exists(gitDir) || File.Exists(gitDir))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<(int exitCode, string output)> GetComfyVersionAsync(string? comfyGitPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(comfyGitPath))
+        {
+            return (-1, string.Empty);
+        }
+
+        var tagResult = await RunCommandAsync("git", $"-C \"{comfyGitPath}\" describe --tags --abbrev=0", cancellationToken, timeoutSeconds: 10);
+        if (tagResult.exitCode == 0 && !string.IsNullOrWhiteSpace(tagResult.output))
+        {
+            return tagResult;
+        }
+
+        // 某些仓库没有 tag，回退到短 commit hash
+        return await RunCommandAsync("git", $"-C \"{comfyGitPath}\" rev-parse --short HEAD", cancellationToken, timeoutSeconds: 10);
+    }
+
+    private async Task<string> DetectGpuViaPyTorchAsync(string pythonExe, CancellationToken cancellationToken)
+    {
+        var script = "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() and torch.cuda.device_count() > 0 else '未检测到 NVIDIA GPU')";
+        var (exitCode, output) = await RunCommandAsync(pythonExe, $"-c \"{script}\"", cancellationToken, timeoutSeconds: 10);
+        if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
+        {
+            return FirstNonEmptyLine(output);
+        }
+
+        return "未检测到 NVIDIA GPU";
+    }
+
+    private static string ExtractPythonVersion(string output)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(output, @"Python\s+\d+\.\d+\.\d+");
+        if (match.Success)
+        {
+            return match.Value.Trim();
+        }
+
+        return FirstNonEmptyLine(output);
+    }
+
+    private static string ExtractPyTorchVersion(string output)
+    {
+        // 兼容 stderr 警告噪声，优先提取真实的 torch 版本号
+        var match = System.Text.RegularExpressions.Regex.Match(output, @"\d+\.\d+\.\d+(?:[A-Za-z0-9\+\.\-_]*)?");
+        if (match.Success)
+        {
+            return match.Value.Trim();
+        }
+
+        var firstLine = FirstNonEmptyLine(output);
+        return string.IsNullOrWhiteSpace(firstLine) ? "未安装" : firstLine;
+    }
+
+    private static string FirstNonEmptyLine(string text)
+    {
+        foreach (var line in text.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed))
+            {
+                return trimmed;
+            }
+        }
+
+        return text.Trim();
     }
 
     /// <summary>
