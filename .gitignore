@@ -368,4 +368,4 @@ FodyWeavers.xsd
 /error.png
 comfyUIWorkFlow
 .vscode/
-/ComfyShell-v1.0.6-win-x64.zip
+*.zip
