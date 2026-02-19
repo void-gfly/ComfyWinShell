@@ -71,7 +71,7 @@ public partial class MainViewModel : ViewModelBase
     public IAsyncRelayCommand ToggleProcessCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
     public IRelayCommand OpenWebPageCommand { get; }
-    public string WebUiBaseUrl => $"http://{_currentConfiguration?.Network.Listen ?? "127.0.0.1"}:{_currentConfiguration?.Network.Port ?? 8188}";
+    public string WebUiBaseUrl => $"http://127.0.0.1:{_currentConfiguration?.Network.Port ?? 8188}";
     public string OpenWebPageToolTip => $"在浏览器打开 {WebUiBaseUrl} (ComfyUI WebUI BaseUrl)";
 
     public MainViewModel(
