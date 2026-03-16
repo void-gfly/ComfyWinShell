@@ -17,6 +17,7 @@ public enum ProcessState
     Idle,
     Starting,
     Running,
+    Recovering,
     Stopping,
     Stopped,
     Error

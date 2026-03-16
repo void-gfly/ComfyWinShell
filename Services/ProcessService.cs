@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.IO;
 using System.Management;
+using System.Net.WebSockets;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
@@ -15,6 +17,8 @@ public class ProcessService : IProcessService, IDisposable
     private const uint CtrlBreakEvent = 1;
     private const int HeartbeatIntervalMs = 3000;
     private const int HeartbeatTimeoutMs = 2000;
+    private const int RecoveryWindowMs = 90000;
+    private const int WebSocketReconnectDelayMs = 2000;
 
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IPythonPathService _pythonPathService;
@@ -25,11 +29,19 @@ public class ProcessService : IProcessService, IDisposable
     private Process? _process;
     private ProcessStatus _status = new();
     private string _comfyApiUrl = "http://127.0.0.1:8188/system_stats";
+    private string _comfyWsUrl = "ws://127.0.0.1:8188/ws";
     private string? _lastPythonPath;
     private string? _lastMainPath;
     private string _lastSystemStats = "暂无 ComfyUI system_stats 数据";
     private bool _isHeartbeatEnabled;
     private bool _lastHeartbeatSuccess;
+    private bool _isDisposed;
+    private bool _stopRequestedByUser;
+    private DateTime? _recoveryDeadlineUtc;
+    private readonly object _statusLock = new();
+    private ClientWebSocket? _webSocket;
+    private CancellationTokenSource? _webSocketCts;
+    private Task? _webSocketMonitorTask;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(uint dwProcessId);
@@ -66,41 +78,14 @@ public class ProcessService : IProcessService, IDisposable
     {
         var normalizedListen = listen == "0.0.0.0" ? "127.0.0.1" : listen;
         _comfyApiUrl = $"http://{normalizedListen}:{port}/system_stats";
+        _comfyWsUrl = $"ws://{normalizedListen}:{port}/ws";
     }
 
     public async Task<ProcessStatus?> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        var apiAlive = await CheckHeartbeatAsync();
-        if (apiAlive)
-        {
-            _status.State = ProcessState.Running;
-            _status.IsRunning = true;
-            if (!_status.StartTime.HasValue)
-            {
-                _status.StartTime = DateTime.Now;
-            }
-
-            if (_status.StartTime.HasValue)
-            {
-                _status.Uptime = DateTime.Now - _status.StartTime.Value;
-            }
-
-            return _status;
-        }
-
-        if (_process is { HasExited: false })
-        {
-            if (_status.StartTime.HasValue)
-            {
-                _status.Uptime = DateTime.Now - _status.StartTime.Value;
-            }
-
-            return _status;
-        }
-
-        _status.State = ProcessState.Stopped;
-        _status.IsRunning = false;
-        return null;
+        await Task.CompletedTask;
+        var snapshot = CreateStatusSnapshot();
+        return snapshot.IsRunning ? snapshot : null;
     }
 
     public Task<bool> StartAsync(string comfyRootPath, ComfyConfiguration configuration, CancellationToken cancellationToken = default)
@@ -124,6 +109,8 @@ public class ProcessService : IProcessService, IDisposable
         }
 
         ConfigureApiEndpoint(configuration.Network.Listen, configuration.Network.Port);
+        _stopRequestedByUser = false;
+        _recoveryDeadlineUtc = null;
 
         var fullCommand = string.IsNullOrWhiteSpace(startInfo.Arguments)
             ? $"\"{startInfo.FileName}\""
@@ -136,7 +123,7 @@ public class ProcessService : IProcessService, IDisposable
             State = ProcessState.Starting,
             IsRunning = true
         };
-        StatusChanged?.Invoke(this, _status);
+        StatusChanged?.Invoke(this, CreateStatusSnapshot());
 
         _process = new Process
         {
@@ -148,7 +135,10 @@ public class ProcessService : IProcessService, IDisposable
         {
             if (!string.IsNullOrWhiteSpace(e.Data))
             {
-                _status.OutputLogs.Add(e.Data);
+                lock (_statusLock)
+                {
+                    _status.OutputLogs.Add(e.Data);
+                }
                 OutputReceived?.Invoke(this, e.Data);
             }
         };
@@ -157,7 +147,10 @@ public class ProcessService : IProcessService, IDisposable
         {
             if (!string.IsNullOrWhiteSpace(e.Data))
             {
-                _status.OutputLogs.Add(e.Data);
+                lock (_statusLock)
+                {
+                    _status.OutputLogs.Add(e.Data);
+                }
                 OutputReceived?.Invoke(this, e.Data);
             }
         };
@@ -169,17 +162,25 @@ public class ProcessService : IProcessService, IDisposable
         {
             _process.BeginOutputReadLine();
             _process.BeginErrorReadLine();
-            _status.State = ProcessState.Running;
-            _status.StartTime = DateTime.Now;
-            _status.ProcessId = _process.Id;
-            StatusChanged?.Invoke(this, _status);
+            lock (_statusLock)
+            {
+                _status.State = ProcessState.Running;
+                _status.StartTime = DateTime.Now;
+                _status.ProcessId = _process.Id;
+                _status.IsRunning = true;
+            }
+            StatusChanged?.Invoke(this, CreateStatusSnapshot());
             StartHeartbeat();
+            StartWebSocketMonitor();
         }
         else
         {
-            _status.State = ProcessState.Error;
-            _status.IsRunning = false;
-            StatusChanged?.Invoke(this, _status);
+            lock (_statusLock)
+            {
+                _status.State = ProcessState.Error;
+                _status.IsRunning = false;
+            }
+            StatusChanged?.Invoke(this, CreateStatusSnapshot());
         }
 
         return Task.FromResult(started);
@@ -187,51 +188,43 @@ public class ProcessService : IProcessService, IDisposable
 
     private void OnProcessExited(object? sender, EventArgs e)
     {
-        OutputReceived?.Invoke(this, "[ProcessService] 检测到进程退出，正在检查服务状态...");
-
-        Task.Run(async () =>
+        if (_stopRequestedByUser)
         {
-            await Task.Delay(2000);
-            var isAlive = await CheckHeartbeatAsync();
+            OutputReceived?.Invoke(this, "[ProcessService] 进程已按用户请求退出");
+            MarkStopped("已停止");
+            return;
+        }
 
-            if (isAlive)
-            {
-                OutputReceived?.Invoke(this, "[ProcessService] 检测到 ComfyUI 内部重启，服务仍在运行");
-                _status.State = ProcessState.Running;
-                _status.IsRunning = true;
-                _status.ProcessId = null;
-            }
-            else
-            {
-                _status.State = ProcessState.Stopped;
-                _status.IsRunning = false;
-                if (_status.StartTime.HasValue)
-                {
-                    _status.Uptime = DateTime.Now - _status.StartTime.Value;
-                }
+        OutputReceived?.Invoke(this, "[ProcessService] 检测到进程退出，进入恢复观察窗口...");
+        lock (_statusLock)
+        {
+            _recoveryDeadlineUtc = DateTime.UtcNow.AddMilliseconds(RecoveryWindowMs);
+            _status.State = ProcessState.Recovering;
+            _status.IsRunning = true;
+            _status.ProcessId = null;
+        }
 
-                StopHeartbeat();
-            }
-
-            StatusChanged?.Invoke(this, _status);
-        });
+        StatusChanged?.Invoke(this, CreateStatusSnapshot());
     }
 
     public Task<bool> StopAsync(CancellationToken cancellationToken = default)
     {
-        StopHeartbeat();
+        _stopRequestedByUser = true;
+        _recoveryDeadlineUtc = null;
 
         if (_process == null || _process.HasExited)
         {
             var killed = TryKillLingeringComfyPythonProcesses();
-            _status.State = ProcessState.Stopped;
-            _status.IsRunning = false;
-            StatusChanged?.Invoke(this, _status);
+            MarkStopped(killed ? "检测到残留进程并已清理" : "已停止");
             return Task.FromResult(killed);
         }
 
-        _status.State = ProcessState.Stopping;
-        StatusChanged?.Invoke(this, _status);
+        lock (_statusLock)
+        {
+            _status.State = ProcessState.Stopping;
+            _status.IsRunning = true;
+        }
+        StatusChanged?.Invoke(this, CreateStatusSnapshot());
         _process.Kill();
         return Task.FromResult(true);
     }
@@ -302,8 +295,14 @@ public class ProcessService : IProcessService, IDisposable
             return Task.FromResult(false);
         }
 
-        _status.State = ProcessState.Stopping;
-        StatusChanged?.Invoke(this, _status);
+        _stopRequestedByUser = true;
+        _recoveryDeadlineUtc = null;
+        lock (_statusLock)
+        {
+            _status.State = ProcessState.Stopping;
+            _status.IsRunning = true;
+        }
+        StatusChanged?.Invoke(this, CreateStatusSnapshot());
 
         if (TrySendConsoleCtrlEvent(CtrlCEvent))
         {
@@ -317,7 +316,8 @@ public class ProcessService : IProcessService, IDisposable
     {
         if (_process == null || _process.HasExited)
         {
-            return true;
+            var snapshot = CreateStatusSnapshot();
+            return !snapshot.IsRunning;
         }
 
         if (timeout <= TimeSpan.Zero)
@@ -341,7 +341,9 @@ public class ProcessService : IProcessService, IDisposable
 
     public void Dispose()
     {
+        _isDisposed = true;
         StopHeartbeat();
+        StopWebSocketMonitor();
         _heartbeatTimer.Dispose();
         _httpClient.Dispose();
         _process?.Dispose();
@@ -367,23 +369,112 @@ public class ProcessService : IProcessService, IDisposable
             return;
         }
 
-        var isAlive = await CheckHeartbeatAsync();
-        if (isAlive != _lastHeartbeatSuccess)
-        {
-            _lastHeartbeatSuccess = isAlive;
-            HeartbeatStatusChanged?.Invoke(this, isAlive);
+        var httpAlive = await CheckHeartbeatAsync();
+        var wsAlive = IsWebSocketAlive();
+        var combinedAlive = httpAlive || wsAlive;
 
-            if (isAlive && _status.State != ProcessState.Running)
+        if (combinedAlive != _lastHeartbeatSuccess)
+        {
+            _lastHeartbeatSuccess = combinedAlive;
+            HeartbeatStatusChanged?.Invoke(this, combinedAlive);
+        }
+
+        EvaluateLiveness(httpAlive, wsAlive);
+    }
+
+    private void EvaluateLiveness(bool httpAlive, bool wsAlive)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var combinedAlive = httpAlive || wsAlive;
+        var shouldNotify = false;
+
+        lock (_statusLock)
+        {
+            if (combinedAlive)
             {
-                OutputReceived?.Invoke(this, "[ProcessService] 心跳检测：ComfyUI 服务已就绪");
-                _status.State = ProcessState.Running;
-                _status.IsRunning = true;
-                StatusChanged?.Invoke(this, _status);
+                _recoveryDeadlineUtc = null;
+                if (!_status.StartTime.HasValue)
+                {
+                    _status.StartTime = DateTime.Now;
+                }
+
+                var processId = _process is { HasExited: false } ? _process.Id : (int?)null;
+                if (_status.State != ProcessState.Running || !_status.IsRunning || _status.ProcessId != processId)
+                {
+                    _status.State = ProcessState.Running;
+                    _status.IsRunning = true;
+                    _status.ProcessId = processId;
+                    shouldNotify = true;
+                }
             }
-            else if (!isAlive && _status.State == ProcessState.Running)
+            else
             {
-                OutputReceived?.Invoke(this, "[ProcessService] 心跳检测：ComfyUI 服务暂时不可用，可能正在重启...");
+                if (_stopRequestedByUser)
+                {
+                    _status.State = ProcessState.Stopped;
+                    _status.IsRunning = false;
+                    _status.ProcessId = null;
+                    shouldNotify = true;
+                }
+                else if (_process is { HasExited: false })
+                {
+                    if (_status.State != ProcessState.Starting && _status.State != ProcessState.Recovering)
+                    {
+                        _status.State = ProcessState.Recovering;
+                        _status.IsRunning = true;
+                        shouldNotify = true;
+                    }
+                }
+                else
+                {
+                    if (!_recoveryDeadlineUtc.HasValue)
+                    {
+                        _recoveryDeadlineUtc = nowUtc.AddMilliseconds(RecoveryWindowMs);
+                        _status.State = ProcessState.Recovering;
+                        _status.IsRunning = true;
+                        _status.ProcessId = null;
+                        shouldNotify = true;
+                    }
+                    else if (nowUtc > _recoveryDeadlineUtc.Value)
+                    {
+                        _status.State = ProcessState.Stopped;
+                        _status.IsRunning = false;
+                        _status.ProcessId = null;
+                        shouldNotify = true;
+                    }
+                }
             }
+
+            if (_status.StartTime.HasValue)
+            {
+                _status.Uptime = DateTime.Now - _status.StartTime.Value;
+            }
+        }
+
+        if (shouldNotify)
+        {
+            var snapshot = CreateStatusSnapshot();
+            if (combinedAlive)
+            {
+                OutputReceived?.Invoke(this, "[ProcessService] 连接恢复：ComfyUI 服务在线");
+            }
+            else if (_stopRequestedByUser)
+            {
+                OutputReceived?.Invoke(this, "[ProcessService] 已完成用户请求的停止流程");
+                StopHeartbeat();
+                StopWebSocketMonitor();
+            }
+            else
+            {
+                OutputReceived?.Invoke(this, "[ProcessService] 服务暂不可用，等待恢复中...");
+                if (snapshot.State == ProcessState.Stopped)
+                {
+                    StopHeartbeat();
+                    StopWebSocketMonitor();
+                }
+            }
+
+            StatusChanged?.Invoke(this, snapshot);
         }
     }
 
@@ -414,6 +505,217 @@ public class ProcessService : IProcessService, IDisposable
         {
             return false;
         }
+    }
+
+    private void StartWebSocketMonitor()
+    {
+        StopWebSocketMonitor();
+        _webSocketCts = new CancellationTokenSource();
+        _webSocketMonitorTask = Task.Run(() => MonitorWebSocketLoopAsync(_webSocketCts.Token));
+    }
+
+    private void StopWebSocketMonitor()
+    {
+        try
+        {
+            _webSocketCts?.Cancel();
+        }
+        catch
+        {
+            // ignored
+        }
+
+        try
+        {
+            if (_webSocket is { State: WebSocketState.Open or WebSocketState.CloseReceived })
+            {
+                _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "shutdown", CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+        finally
+        {
+            _webSocket?.Dispose();
+            _webSocket = null;
+            _webSocketCts?.Dispose();
+            _webSocketCts = null;
+        }
+    }
+
+    private async Task MonitorWebSocketLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested && !_isDisposed)
+        {
+            ClientWebSocket? ws = null;
+            try
+            {
+                ws = new ClientWebSocket();
+                ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+                var clientId = $"comfyshell-{Environment.ProcessId}";
+                var wsUri = new Uri($"{_comfyWsUrl}?clientId={clientId}");
+                await ws.ConnectAsync(wsUri, cancellationToken);
+                _webSocket = ws;
+                OnWebSocketConnected();
+                await ReceiveWebSocketMessagesAsync(ws, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError("WebSocket 监控连接异常", ex);
+                OnWebSocketDisconnected();
+            }
+            finally
+            {
+                if (_webSocket == ws)
+                {
+                    _webSocket = null;
+                }
+                ws?.Dispose();
+            }
+
+            try
+            {
+                await Task.Delay(WebSocketReconnectDelayMs, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task ReceiveWebSocketMessagesAsync(ClientWebSocket ws, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[8192];
+        while (ws.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        {
+            var segment = new ArraySegment<byte>(buffer);
+            using var ms = new MemoryStream();
+
+            WebSocketReceiveResult result;
+            do
+            {
+                result = await ws.ReceiveAsync(segment, cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    OnWebSocketDisconnected();
+                    return;
+                }
+
+                if (result.Count > 0)
+                {
+                    ms.Write(buffer, 0, result.Count);
+                }
+            }
+            while (!result.EndOfMessage);
+
+            if (ms.Length == 0 || result.MessageType != WebSocketMessageType.Text)
+            {
+                continue;
+            }
+
+            var message = Encoding.UTF8.GetString(ms.ToArray());
+            OnWebSocketMessage(message);
+        }
+    }
+
+    private void OnWebSocketConnected()
+    {
+        lock (_statusLock)
+        {
+            _lastHeartbeatSuccess = true;
+        }
+        OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已连接");
+        HeartbeatStatusChanged?.Invoke(this, true);
+        EvaluateLiveness(httpAlive: false, wsAlive: true);
+    }
+
+    private void OnWebSocketDisconnected()
+    {
+        OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已断开，等待重连...");
+        EvaluateLiveness(httpAlive: false, wsAlive: false);
+    }
+
+    private void OnWebSocketMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        // 只要能收到消息就说明服务在线；再按类型输出少量诊断日志避免刷屏
+        EvaluateLiveness(httpAlive: false, wsAlive: true);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            if (!doc.RootElement.TryGetProperty("type", out var typeElement))
+            {
+                return;
+            }
+
+            var messageType = typeElement.GetString();
+            if (string.Equals(messageType, "status", StringComparison.OrdinalIgnoreCase))
+            {
+                OutputReceived?.Invoke(this, "[ProcessService] WebSocket status 消息：服务在线");
+            }
+        }
+        catch (JsonException)
+        {
+            // 非标准消息直接忽略
+        }
+    }
+
+    private bool IsWebSocketAlive()
+    {
+        return _webSocket is { State: WebSocketState.Open };
+    }
+
+    private ProcessStatus CreateStatusSnapshot()
+    {
+        lock (_statusLock)
+        {
+            var snapshot = new ProcessStatus
+            {
+                VersionId = _status.VersionId,
+                IsRunning = _status.IsRunning,
+                ProcessId = _status.ProcessId,
+                StartTime = _status.StartTime,
+                Uptime = _status.StartTime.HasValue ? DateTime.Now - _status.StartTime.Value : null,
+                LastError = _status.LastError,
+                State = _status.State,
+                OutputLogs = new List<string>(_status.OutputLogs)
+            };
+            return snapshot;
+        }
+    }
+
+    private void MarkStopped(string reason)
+    {
+        lock (_statusLock)
+        {
+            _status.State = ProcessState.Stopped;
+            _status.IsRunning = false;
+            _status.ProcessId = null;
+            if (_status.StartTime.HasValue)
+            {
+                _status.Uptime = DateTime.Now - _status.StartTime.Value;
+            }
+        }
+
+        StopHeartbeat();
+        StopWebSocketMonitor();
+        OutputReceived?.Invoke(this, $"[ProcessService] {reason}");
+        HeartbeatStatusChanged?.Invoke(this, false);
+        StatusChanged?.Invoke(this, CreateStatusSnapshot());
     }
 
     private void UpdateSystemStats(string responseText)

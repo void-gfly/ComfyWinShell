@@ -129,7 +129,6 @@ public partial class MainViewModel : ViewModelBase
 
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
-        _processService.HeartbeatStatusChanged += OnHeartbeatStatusChanged;
         _processService.SystemStatsUpdated += OnSystemStatsUpdated;
         _logService.LogReceived += OnLogReceived;
 
@@ -321,11 +320,6 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private void OnHeartbeatStatusChanged(object? sender, bool isAlive)
-    {
-        RunOnUiThread(() => StatusBarText = isAlive ? "状态: 就绪" : "状态: 未启动");
-    }
-
     private void OnSystemStatsUpdated(object? sender, string statsJson)
     {
         if (string.IsNullOrWhiteSpace(statsJson))
@@ -342,6 +336,7 @@ public partial class MainViewModel : ViewModelBase
         {
             ProcessStatusText = "未运行";
             IsRunning = false;
+            StatusBarText = "状态: 未启动";
             return;
         }
 
@@ -349,13 +344,20 @@ public partial class MainViewModel : ViewModelBase
         {
             ProcessState.Starting => "启动中",
             ProcessState.Running => "运行中",
+            ProcessState.Recovering => "恢复中",
             ProcessState.Stopping => "停止中",
             ProcessState.Stopped => "已停止",
             ProcessState.Error => "异常",
             _ => "空闲"
         };
         IsRunning = status.IsRunning;
-        StatusBarText = status.IsRunning ? "状态: 就绪" : "状态: 未启动";
+        StatusBarText = status.State switch
+        {
+            ProcessState.Recovering => "状态: 恢复中",
+            ProcessState.Starting => "状态: 启动中",
+            ProcessState.Stopping => "状态: 停止中",
+            _ => status.IsRunning ? "状态: 就绪" : "状态: 未启动"
+        };
         OpenWebPageCommand.NotifyCanExecuteChanged();
     }
 

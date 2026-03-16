@@ -149,6 +149,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         {
             ProcessState.Starting => "启动中",
             ProcessState.Running => "运行中",
+            ProcessState.Recovering => "恢复中",
             ProcessState.Stopping => "停止中",
             ProcessState.Stopped => "已停止",
             ProcessState.Error => "异常",
@@ -191,6 +192,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
             {
                 ProcessState.Starting => "启动中",
                 ProcessState.Running => "运行中",
+                ProcessState.Recovering => "恢复中",
                 ProcessState.Stopping => "停止中",
                 ProcessState.Stopped => "已停止",
                 ProcessState.Error => "异常",
