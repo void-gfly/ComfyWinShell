@@ -19,6 +19,7 @@ public class ProcessService : IProcessService, IDisposable
     private const int HeartbeatTimeoutMs = 2000;
     private const int RecoveryWindowMs = 90000;
     private const int WebSocketReconnectDelayMs = 2000;
+    private const int WebSocketInitialConnectDelayMs = 6000;
 
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IPythonPathService _pythonPathService;
@@ -42,6 +43,8 @@ public class ProcessService : IProcessService, IDisposable
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _webSocketCts;
     private Task? _webSocketMonitorTask;
+    private bool _webSocketWaitingForServerNotified;
+    private bool _webSocketDisconnectedNotified;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(uint dwProcessId);
@@ -411,10 +414,13 @@ public class ProcessService : IProcessService, IDisposable
             {
                 if (_stopRequestedByUser)
                 {
-                    _status.State = ProcessState.Stopped;
-                    _status.IsRunning = false;
-                    _status.ProcessId = null;
-                    shouldNotify = true;
+                    if (_status.State != ProcessState.Stopped || _status.IsRunning || _status.ProcessId != null)
+                    {
+                        _status.State = ProcessState.Stopped;
+                        _status.IsRunning = false;
+                        _status.ProcessId = null;
+                        shouldNotify = true;
+                    }
                 }
                 else if (_process is { HasExited: false })
                 {
@@ -437,10 +443,13 @@ public class ProcessService : IProcessService, IDisposable
                     }
                     else if (nowUtc > _recoveryDeadlineUtc.Value)
                     {
-                        _status.State = ProcessState.Stopped;
-                        _status.IsRunning = false;
-                        _status.ProcessId = null;
-                        shouldNotify = true;
+                        if (_status.State != ProcessState.Stopped || _status.IsRunning || _status.ProcessId != null)
+                        {
+                            _status.State = ProcessState.Stopped;
+                            _status.IsRunning = false;
+                            _status.ProcessId = null;
+                            shouldNotify = true;
+                        }
                     }
                 }
             }
@@ -467,11 +476,6 @@ public class ProcessService : IProcessService, IDisposable
             else
             {
                 OutputReceived?.Invoke(this, "[ProcessService] 服务暂不可用，等待恢复中...");
-                if (snapshot.State == ProcessState.Stopped)
-                {
-                    StopHeartbeat();
-                    StopWebSocketMonitor();
-                }
             }
 
             StatusChanged?.Invoke(this, snapshot);
@@ -510,6 +514,8 @@ public class ProcessService : IProcessService, IDisposable
     private void StartWebSocketMonitor()
     {
         StopWebSocketMonitor();
+        _webSocketWaitingForServerNotified = false;
+        _webSocketDisconnectedNotified = false;
         _webSocketCts = new CancellationTokenSource();
         _webSocketMonitorTask = Task.Run(() => MonitorWebSocketLoopAsync(_webSocketCts.Token));
     }
@@ -549,9 +555,19 @@ public class ProcessService : IProcessService, IDisposable
 
     private async Task MonitorWebSocketLoopAsync(CancellationToken cancellationToken)
     {
+        try
+        {
+            await Task.Delay(WebSocketInitialConnectDelayMs, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         while (!cancellationToken.IsCancellationRequested && !_isDisposed)
         {
             ClientWebSocket? ws = null;
+            var connected = false;
             try
             {
                 ws = new ClientWebSocket();
@@ -559,6 +575,7 @@ public class ProcessService : IProcessService, IDisposable
                 var clientId = $"comfyshell-{Environment.ProcessId}";
                 var wsUri = new Uri($"{_comfyWsUrl}?clientId={clientId}");
                 await ws.ConnectAsync(wsUri, cancellationToken);
+                connected = true;
                 _webSocket = ws;
                 OnWebSocketConnected();
                 await ReceiveWebSocketMessagesAsync(ws, cancellationToken);
@@ -567,9 +584,21 @@ public class ProcessService : IProcessService, IDisposable
             {
                 break;
             }
+            catch (WebSocketException ex) when (!connected && IsExpectedConnectFailure(ex))
+            {
+                NotifyWebSocketWaitingForServer(ex.Message);
+                EvaluateLiveness(httpAlive: false, wsAlive: false);
+            }
             catch (Exception ex)
             {
-                _logService.LogError("WebSocket 监控连接异常", ex);
+                if (!connected && IsExpectedConnectFailure(ex))
+                {
+                    NotifyWebSocketWaitingForServer(ex.Message);
+                }
+                else
+                {
+                    _logService.LogError("WebSocket 监控异常", ex);
+                }
                 OnWebSocketDisconnected();
             }
             finally
@@ -633,6 +662,8 @@ public class ProcessService : IProcessService, IDisposable
         {
             _lastHeartbeatSuccess = true;
         }
+        _webSocketWaitingForServerNotified = false;
+        _webSocketDisconnectedNotified = false;
         OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已连接");
         HeartbeatStatusChanged?.Invoke(this, true);
         EvaluateLiveness(httpAlive: false, wsAlive: true);
@@ -640,7 +671,11 @@ public class ProcessService : IProcessService, IDisposable
 
     private void OnWebSocketDisconnected()
     {
-        OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已断开，等待重连...");
+        if (!_webSocketDisconnectedNotified)
+        {
+            _webSocketDisconnectedNotified = true;
+            OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已断开，等待重连...");
+        }
         EvaluateLiveness(httpAlive: false, wsAlive: false);
     }
 
@@ -677,6 +712,26 @@ public class ProcessService : IProcessService, IDisposable
     private bool IsWebSocketAlive()
     {
         return _webSocket is { State: WebSocketState.Open };
+    }
+
+    private void NotifyWebSocketWaitingForServer(string reason)
+    {
+        if (_webSocketWaitingForServerNotified)
+        {
+            return;
+        }
+
+        _webSocketWaitingForServerNotified = true;
+        _webSocketDisconnectedNotified = false;
+        OutputReceived?.Invoke(this, $"[ProcessService] WebSocket 暂不可连接（等待 ComfyUI 启动）：{reason}");
+    }
+
+    private static bool IsExpectedConnectFailure(Exception ex)
+    {
+        var message = ex.Message;
+        return message.Contains("Unable to connect to the remote server", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("actively refused", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("No connection could be made", StringComparison.OrdinalIgnoreCase);
     }
 
     private ProcessStatus CreateStatusSnapshot()
