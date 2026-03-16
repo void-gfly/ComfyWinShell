@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
@@ -10,6 +10,23 @@ namespace WpfDesktop.Services;
 /// </summary>
 public class WorkflowPackagerService : IWorkflowPackagerService
 {
+    private static readonly string[] PythonRuntimeDirectoryNames =
+    [
+        "python_embeded",
+        "python_embedded",
+        "python",
+        "py",
+        "python3",
+        "python310",
+        "python311",
+        "python312",
+        "py312",
+        "python3.12",
+        "python313",
+        "venv",
+        ".venv"
+    ];
+
     private readonly IComfyPathService _comfyPathService;
     private readonly ILogService _logService;
 
@@ -34,7 +51,9 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         try
         {
             // 验证 ComfyUI 路径
-            if (!_comfyPathService.IsValid || string.IsNullOrEmpty(_comfyPathService.ComfyUiPath))
+            if (!_comfyPathService.IsValid ||
+                string.IsNullOrEmpty(_comfyPathService.ComfyUiPath) ||
+                string.IsNullOrEmpty(_comfyPathService.ComfyRootPath))
             {
                 result.Success = false;
                 result.ErrorMessage = "ComfyUI 路径未配置或无效";
@@ -42,6 +61,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             }
 
             var comfyPath = _comfyPathService.ComfyUiPath;
+            var comfyRootPath = _comfyPathService.ComfyRootPath;
 
             // 验证目标目录
             if (!Directory.Exists(targetPath))
@@ -49,22 +69,28 @@ public class WorkflowPackagerService : IWorkflowPackagerService
                 Directory.CreateDirectory(targetPath);
             }
 
+            var packagedComfyPath = Path.Combine(targetPath, "ComfyUI");
+
             progress?.Report("📂 开始复制 ComfyUI 核心文件...");
             progressPercentage?.Report(10);
 
             // 第一步：复制 ComfyUI 目录（排除 models 文件夹）
-            var filesCopied = await CopyComfyUiFilesAsync(comfyPath, targetPath, progress);
+            var filesCopied = await CopyComfyUiFilesAsync(comfyPath, packagedComfyPath, progress);
             result.TotalFilesCopied = filesCopied;
 
+            progress?.Report("🐍 开始复制 Python 运行环境...");
+            var pythonFilesCopied = await CopyPythonRuntimeAsync(comfyRootPath, targetPath, progress);
+            result.TotalFilesCopied += pythonFilesCopied;
+
             progressPercentage?.Report(50);
-            progress?.Report($"✅ 已复制 {filesCopied} 个 ComfyUI 文件");
+            progress?.Report($"✅ 已复制 {filesCopied} 个 ComfyUI 文件，{pythonFilesCopied} 个 Python 环境文件");
 
             // 第二步：复制工作流所需的模型
             progress?.Report("📦 开始复制工作流所需模型...");
             var modelsCopied = await CopyRequiredModelsAsync(
                 analysisResult.RequiredModels,
                 comfyPath,
-                targetPath,
+                packagedComfyPath,
                 progress);
             result.TotalModelsCopied = modelsCopied;
 
@@ -73,7 +99,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
 
             // 第三步：复制工作流文件本身
             progress?.Report("📄 复制工作流文件...");
-            await CopyWorkflowFileAsync(analysisResult.WorkflowPath, targetPath);
+            await CopyWorkflowFileAsync(analysisResult.WorkflowPath, packagedComfyPath);
             progress?.Report("✅ 工作流文件已复制");
 
             // 计算打包后的总大小
@@ -124,7 +150,9 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             }
 
             // 验证 ComfyUI 路径
-            if (!_comfyPathService.IsValid || string.IsNullOrEmpty(_comfyPathService.ComfyUiPath))
+            if (!_comfyPathService.IsValid ||
+                string.IsNullOrEmpty(_comfyPathService.ComfyUiPath) ||
+                string.IsNullOrEmpty(_comfyPathService.ComfyRootPath))
             {
                 result.Success = false;
                 result.ErrorMessage = "ComfyUI 路径未配置或无效";
@@ -132,6 +160,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             }
 
             var comfyPath = _comfyPathService.ComfyUiPath;
+            var comfyRootPath = _comfyPathService.ComfyRootPath;
 
             // 验证目标目录
             if (!Directory.Exists(targetPath))
@@ -139,14 +168,19 @@ public class WorkflowPackagerService : IWorkflowPackagerService
                 Directory.CreateDirectory(targetPath);
             }
 
+            var packagedComfyPath = Path.Combine(targetPath, "ComfyUI");
+
             progress?.Report("📂 开始复制 ComfyUI 核心文件...");
             progressPercentage?.Report(10);
 
             // 第一步：复制 ComfyUI 核心目录（排除 models）
-            var filesCopied = await CopyComfyUiFilesAsync(comfyPath, targetPath, progress);
+            var filesCopied = await CopyComfyUiFilesAsync(comfyPath, packagedComfyPath, progress);
             result.TotalFilesCopied = filesCopied;
+            progress?.Report("🐍 开始复制 Python 运行环境...");
+            var pythonFilesCopied = await CopyPythonRuntimeAsync(comfyRootPath, targetPath, progress);
+            result.TotalFilesCopied += pythonFilesCopied;
             progressPercentage?.Report(45);
-            progress?.Report($"✅ 已复制 {filesCopied} 个 ComfyUI 文件");
+            progress?.Report($"✅ 已复制 {filesCopied} 个 ComfyUI 文件，{pythonFilesCopied} 个 Python 环境文件");
 
             // 第二步：合并去重模型后复制
             progress?.Report("📦 合并工作流模型依赖...");
@@ -161,7 +195,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             var modelsCopied = await CopyRequiredModelsAsync(
                 mergedModels,
                 comfyPath,
-                targetPath,
+                packagedComfyPath,
                 progress);
             result.TotalModelsCopied = modelsCopied;
             progressPercentage?.Report(80);
@@ -172,7 +206,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             for (var i = 0; i < analysisResults.Count; i++)
             {
                 var analysis = analysisResults[i];
-                await CopyWorkflowFileAsync(analysis.WorkflowPath, targetPath);
+                await CopyWorkflowFileAsync(analysis.WorkflowPath, packagedComfyPath);
                 result.TotalFilesCopied++;
 
                 progress?.Report($"   ✓ {analysis.WorkflowName}");
@@ -223,6 +257,38 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         await Task.Run(() =>
         {
             CopyDirectoryRecursive(sourcePath, targetPath, excludedDirs, ref filesCopied, progress);
+        });
+
+        return filesCopied;
+    }
+
+    /// <summary>
+    /// 复制与 ComfyUI 同级的 Python 运行环境目录，保持原有目录名与层级。
+    /// </summary>
+    private async Task<int> CopyPythonRuntimeAsync(
+        string comfyRootPath,
+        string targetPath,
+        IProgress<string>? progress)
+    {
+        var pythonRuntimePath = FindPythonRuntimePath(comfyRootPath);
+        if (string.IsNullOrWhiteSpace(pythonRuntimePath))
+        {
+            progress?.Report("   ⚠ 未检测到可复制的 Python 运行环境目录，已跳过");
+            return 0;
+        }
+
+        var runtimeDirName = Path.GetFileName(
+            pythonRuntimePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var targetPythonPath = Path.Combine(targetPath, runtimeDirName);
+        var filesCopied = 0;
+        var excludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "__pycache__"
+        };
+
+        await Task.Run(() =>
+        {
+            CopyDirectoryRecursive(pythonRuntimePath, targetPythonPath, excludedDirs, ref filesCopied, progress);
         });
 
         return filesCopied;
@@ -379,5 +445,55 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         }
 
         return size;
+    }
+
+    private string? FindPythonRuntimePath(string comfyRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(comfyRootPath) || !Directory.Exists(comfyRootPath))
+        {
+            return null;
+        }
+
+        foreach (var dirName in PythonRuntimeDirectoryNames)
+        {
+            var candidatePath = Path.Combine(comfyRootPath, dirName);
+            if (HasPythonExecutable(candidatePath))
+            {
+                return candidatePath;
+            }
+        }
+
+        try
+        {
+            foreach (var directory in Directory.EnumerateDirectories(comfyRootPath))
+            {
+                if (string.Equals(Path.GetFileName(directory), "ComfyUI", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (HasPythonExecutable(directory))
+                {
+                    return directory;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.Log($"检测 Python 运行环境目录失败: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private static bool HasPythonExecutable(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return false;
+        }
+
+        return File.Exists(Path.Combine(directoryPath, "python.exe")) ||
+               File.Exists(Path.Combine(directoryPath, "Scripts", "python.exe"));
     }
 }
