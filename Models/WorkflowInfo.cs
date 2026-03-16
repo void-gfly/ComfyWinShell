@@ -1,9 +1,11 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace WpfDesktop.Models;
 
 /// <summary>
 /// 工作流文件信息
 /// </summary>
-public class WorkflowInfo
+public partial class WorkflowInfo : ObservableObject
 {
     /// <summary>
     /// 工作流文件名
@@ -39,4 +41,10 @@ public class WorkflowInfo
     /// 最后修改时间
     /// </summary>
     public DateTime LastModified { get; set; }
+
+    /// <summary>
+    /// 是否选中（用于批量打包）
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSelected;
 }

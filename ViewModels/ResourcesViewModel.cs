@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 using WpfDesktop.Views;
@@ -59,6 +60,9 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     [ObservableProperty]
     private int _workflowsCount;
+
+    [ObservableProperty]
+    private int _selectedWorkflowCount;
 
     [ObservableProperty]
     private string _totalModelSize = "计算中...";
@@ -191,6 +195,108 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanSelectAllWorkflows))]
+    private void SelectAllWorkflows()
+    {
+        foreach (var workflow in Workflows.Where(w => !w.IsSelected))
+        {
+            workflow.IsSelected = true;
+        }
+    }
+
+    private bool CanSelectAllWorkflows()
+    {
+        return Workflows.Count > 0 && Workflows.Any(w => !w.IsSelected) && !IsLoading;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanUnselectAllWorkflows))]
+    private void UnselectAllWorkflows()
+    {
+        foreach (var workflow in Workflows.Where(w => w.IsSelected))
+        {
+            workflow.IsSelected = false;
+        }
+    }
+
+    private bool CanUnselectAllWorkflows()
+    {
+        return SelectedWorkflowCount > 0 && !IsLoading;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanBatchPackageWorkflows))]
+    private async Task BatchPackageWorkflowsAsync()
+    {
+        var selectedWorkflows = Workflows.Where(w => w.IsSelected).ToList();
+        if (selectedWorkflows.Count == 0)
+        {
+            StatusMessage = "请先选择要打包的工作流";
+            return;
+        }
+
+        var previousStatus = StatusMessage;
+
+        try
+        {
+            IsLoading = true;
+            var analysisResults = new List<WorkflowAnalysisResult>(selectedWorkflows.Count);
+
+            for (var i = 0; i < selectedWorkflows.Count; i++)
+            {
+                var workflow = selectedWorkflows[i];
+                StatusMessage = $"正在分析工作流 ({i + 1}/{selectedWorkflows.Count}): {workflow.Name}";
+
+                if (!_workflowAnalyzerService.IsWorkflowFile(workflow.Path))
+                {
+                    StatusMessage = $"无效工作流文件: {workflow.Name}";
+                    return;
+                }
+
+                var result = await _workflowAnalyzerService.AnalyzeWorkflowAsync(workflow.Path);
+                if (!result.Success)
+                {
+                    StatusMessage = $"分析失败: {workflow.Name}, {result.ErrorMessage}";
+                    return;
+                }
+
+                analysisResults.Add(result);
+            }
+
+            var app = (App)Application.Current;
+            var packagerService = app.AppHost?.Services.GetRequiredService<IWorkflowPackagerService>();
+            if (packagerService == null)
+            {
+                StatusMessage = "无法获取打包服务";
+                return;
+            }
+
+            var dialog = new BatchWorkflowPackagerDialog(packagerService, _logService, analysisResults)
+            {
+                Owner = Application.Current.MainWindow
+            };
+
+            dialog.ShowDialog();
+            StatusMessage = $"批量分析完成，共 {analysisResults.Count} 个工作流";
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("批量工作流分析失败", ex);
+            StatusMessage = $"批量分析失败: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+            if (string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                StatusMessage = previousStatus;
+            }
+        }
+    }
+
+    private bool CanBatchPackageWorkflows()
+    {
+        return SelectedWorkflowCount > 0 && !IsLoading;
+    }
+
     #endregion
 
     #region INavigationAware
@@ -206,6 +312,7 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     private void ClearData()
     {
+        DetachWorkflowSelectionHandlers(Workflows);
         CustomNodes.Clear();
         ModelFolders.Clear();
         ExtraModelFolders.Clear();
@@ -214,8 +321,10 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         ModelFoldersCount = 0;
         ExtraModelFoldersCount = 0;
         WorkflowsCount = 0;
+        SelectedWorkflowCount = 0;
         TotalModelSize = "0 GB";
         TotalExtraModelSize = "0 GB";
+        RefreshWorkflowCommandStates();
     }
 
     private async Task LoadAllResourcesAsync()
@@ -304,7 +413,11 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     private async Task LoadWorkflowsAsync()
     {
-        RunOnUiThread(() => Workflows.Clear());
+        RunOnUiThread(() =>
+        {
+            DetachWorkflowSelectionHandlers(Workflows);
+            Workflows.Clear();
+        });
 
         var workflows = await _resourceService.GetWorkflowsAsync();
         RunOnUiThread(() =>
@@ -312,9 +425,54 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
             foreach (var workflow in workflows)
             {
                 Workflows.Add(workflow);
+                workflow.PropertyChanged += OnWorkflowPropertyChanged;
             }
             WorkflowsCount = Workflows.Count;
+            UpdateSelectedWorkflowCount();
+            RefreshWorkflowCommandStates();
         });
+    }
+
+    partial void OnSelectedWorkflowCountChanged(int value)
+    {
+        BatchPackageWorkflowsCommand.NotifyCanExecuteChanged();
+        SelectAllWorkflowsCommand.NotifyCanExecuteChanged();
+        UnselectAllWorkflowsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsLoadingChanged(bool value)
+    {
+        BatchPackageWorkflowsCommand.NotifyCanExecuteChanged();
+        SelectAllWorkflowsCommand.NotifyCanExecuteChanged();
+        UnselectAllWorkflowsCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnWorkflowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorkflowInfo.IsSelected))
+        {
+            UpdateSelectedWorkflowCount();
+        }
+    }
+
+    private void DetachWorkflowSelectionHandlers(IEnumerable<WorkflowInfo> workflows)
+    {
+        foreach (var workflow in workflows)
+        {
+            workflow.PropertyChanged -= OnWorkflowPropertyChanged;
+        }
+    }
+
+    private void UpdateSelectedWorkflowCount()
+    {
+        SelectedWorkflowCount = Workflows.Count(w => w.IsSelected);
+    }
+
+    private void RefreshWorkflowCommandStates()
+    {
+        BatchPackageWorkflowsCommand.NotifyCanExecuteChanged();
+        SelectAllWorkflowsCommand.NotifyCanExecuteChanged();
+        UnselectAllWorkflowsCommand.NotifyCanExecuteChanged();
     }
 
     private async Task CalculateFolderSizesAsync(ObservableCollection<ModelFolderInfo> folders, bool isExtraModel)

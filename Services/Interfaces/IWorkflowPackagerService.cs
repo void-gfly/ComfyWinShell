@@ -20,4 +20,18 @@ public interface IWorkflowPackagerService
         string targetPath,
         IProgress<string>? progress = null,
         IProgress<double>? progressPercentage = null);
+
+    /// <summary>
+    /// 批量打包多个工作流（合并重叠资源）
+    /// </summary>
+    /// <param name="analysisResults">多个工作流分析结果</param>
+    /// <param name="targetPath">打包目标目录</param>
+    /// <param name="progress">进度报告（文本消息）</param>
+    /// <param name="progressPercentage">进度百分比</param>
+    /// <returns>打包结果</returns>
+    Task<WorkflowPackageResult> PackageBatchWorkflowsAsync(
+        List<WorkflowAnalysisResult> analysisResults,
+        string targetPath,
+        IProgress<string>? progress = null,
+        IProgress<double>? progressPercentage = null);
 }

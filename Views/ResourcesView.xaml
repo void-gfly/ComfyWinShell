@@ -317,63 +317,111 @@
 
                 <!-- 工作流 Tab -->
                 <TabItem Header="工作流">
-                    <ListView ItemsSource="{Binding Workflows}"
-                              BorderThickness="0"
-                              Background="Transparent"
-                              Margin="0,10,0,0">
-                        <ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="文件名" Width="300">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Name}" 
-                                                       FontWeight="SemiBold" 
-                                                       Foreground="{DynamicResource PrimaryTextBrush}"
-                                                       ToolTip="{Binding Path}"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="大小" Width="100">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding SizeDisplay}" 
-                                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                                       HorizontalAlignment="Right"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="修改时间" Width="150">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding LastModified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" 
-                                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="操作" Width="140">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Path}"
-                                                        Content="定位"
-                                                        Padding="8,2"
-                                                        FontSize="11"
-                                                        Margin="0,0,4,0"
-                                                        Style="{DynamicResource SecondaryButtonStyle}"/>
-                                                <Button Command="{Binding DataContext.AnalyzeWorkflowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Path}"
-                                                        Content="分析"
-                                                        Padding="8,2"
-                                                        FontSize="11"
-                                                        Style="{DynamicResource PrimaryButtonStyle}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
+                    <Grid Margin="0,10,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                <Button Content="全选"
+                                        Command="{Binding SelectAllWorkflowsCommand}"
+                                        Padding="10,4"
+                                        FontSize="11"
+                                        Margin="0,0,6,0"
+                                        Style="{DynamicResource SecondaryButtonStyle}"/>
+                                <Button Content="取消全选"
+                                        Command="{Binding UnselectAllWorkflowsCommand}"
+                                        Padding="10,4"
+                                        FontSize="11"
+                                        Style="{DynamicResource SecondaryButtonStyle}"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                <TextBlock Text="已选择: "
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding SelectedWorkflowCount}"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,12,0"/>
+                                <Button Content="批量打包"
+                                        Command="{Binding BatchPackageWorkflowsCommand}"
+                                        Padding="12,4"
+                                        FontSize="11"
+                                        Style="{DynamicResource PrimaryButtonStyle}"/>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <ListView Grid.Row="1"
+                                  ItemsSource="{Binding Workflows}"
+                                  BorderThickness="0"
+                                  Background="Transparent">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="选择" Width="50">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="文件名" Width="260">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" 
+                                                           FontWeight="SemiBold" 
+                                                           Foreground="{DynamicResource PrimaryTextBrush}"
+                                                           ToolTip="{Binding Path}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="大小" Width="100">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding SizeDisplay}" 
+                                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                                           HorizontalAlignment="Right"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="修改时间" Width="150">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding LastModified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" 
+                                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="操作" Width="140">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding Path}"
+                                                            Content="定位"
+                                                            Padding="8,2"
+                                                            FontSize="11"
+                                                            Margin="0,0,4,0"
+                                                            Style="{DynamicResource SecondaryButtonStyle}"/>
+                                                    <Button Command="{Binding DataContext.AnalyzeWorkflowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding Path}"
+                                                            Content="分析"
+                                                            Padding="8,2"
+                                                            FontSize="11"
+                                                            Style="{DynamicResource PrimaryButtonStyle}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Grid>
                 </TabItem>
             </TabControl>
         </Grid>

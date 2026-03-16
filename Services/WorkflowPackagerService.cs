@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -101,6 +102,110 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         return result;
     }
 
+    public async Task<WorkflowPackageResult> PackageBatchWorkflowsAsync(
+        List<WorkflowAnalysisResult> analysisResults,
+        string targetPath,
+        IProgress<string>? progress = null,
+        IProgress<double>? progressPercentage = null)
+    {
+        var result = new WorkflowPackageResult
+        {
+            TargetPath = targetPath,
+            StartTime = DateTime.Now
+        };
+
+        try
+        {
+            if (analysisResults.Count == 0)
+            {
+                result.Success = false;
+                result.ErrorMessage = "未提供可打包的工作流分析结果";
+                return result;
+            }
+
+            // 验证 ComfyUI 路径
+            if (!_comfyPathService.IsValid || string.IsNullOrEmpty(_comfyPathService.ComfyUiPath))
+            {
+                result.Success = false;
+                result.ErrorMessage = "ComfyUI 路径未配置或无效";
+                return result;
+            }
+
+            var comfyPath = _comfyPathService.ComfyUiPath;
+
+            // 验证目标目录
+            if (!Directory.Exists(targetPath))
+            {
+                Directory.CreateDirectory(targetPath);
+            }
+
+            progress?.Report("📂 开始复制 ComfyUI 核心文件...");
+            progressPercentage?.Report(10);
+
+            // 第一步：复制 ComfyUI 核心目录（排除 models）
+            var filesCopied = await CopyComfyUiFilesAsync(comfyPath, targetPath, progress);
+            result.TotalFilesCopied = filesCopied;
+            progressPercentage?.Report(45);
+            progress?.Report($"✅ 已复制 {filesCopied} 个 ComfyUI 文件");
+
+            // 第二步：合并去重模型后复制
+            progress?.Report("📦 合并工作流模型依赖...");
+            var mergedModels = analysisResults
+                .SelectMany(r => r.RequiredModels)
+                .Where(m => !string.IsNullOrWhiteSpace(m.ModelPath))
+                .GroupBy(m => m.ModelPath, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+
+            progress?.Report($"📦 去重后模型总数: {mergedModels.Count}");
+            var modelsCopied = await CopyRequiredModelsAsync(
+                mergedModels,
+                comfyPath,
+                targetPath,
+                progress);
+            result.TotalModelsCopied = modelsCopied;
+            progressPercentage?.Report(80);
+            progress?.Report($"✅ 已复制 {modelsCopied} 个模型文件");
+
+            // 第三步：复制所有工作流文件
+            progress?.Report("📄 开始复制工作流文件...");
+            for (var i = 0; i < analysisResults.Count; i++)
+            {
+                var analysis = analysisResults[i];
+                await CopyWorkflowFileAsync(analysis.WorkflowPath, targetPath);
+                result.TotalFilesCopied++;
+
+                progress?.Report($"   ✓ {analysis.WorkflowName}");
+                var percentage = 80 + (15.0 * (i + 1) / analysisResults.Count);
+                progressPercentage?.Report(percentage);
+            }
+
+            // 计算打包后的总大小
+            result.TotalSizeBytes = CalculateDirectorySize(targetPath);
+            var sizeInMB = result.TotalSizeBytes / (1024.0 * 1024.0);
+            var sizeInGB = result.TotalSizeBytes / (1024.0 * 1024.0 * 1024.0);
+            var sizeDisplay = sizeInGB >= 1 ? $"{sizeInGB:F2} GB" : $"{sizeInMB:F2} MB";
+
+            progress?.Report($"📊 批量打包完成，总大小: {sizeDisplay}");
+            progressPercentage?.Report(100);
+
+            result.Success = true;
+            result.EndTime = DateTime.Now;
+
+            _logService.Log(
+                $"批量工作流打包完成: 工作流 {analysisResults.Count} 个, 文件 {result.TotalFilesCopied} 个, 模型 {result.TotalModelsCopied} 个, {sizeDisplay}");
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            result.EndTime = DateTime.Now;
+            _logService.LogError("批量工作流打包失败", ex);
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// 复制 ComfyUI 核心文件（排除 models 目录）
     /// </summary>
@@ -112,7 +217,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         var filesCopied = 0;
         var excludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "models", "__pycache__", ".git", ".vscode", ".idea", "venv", ".venv"
+            "models", "input", "output", "temp", "__pycache__", ".git", ".vscode", ".idea", "venv", ".venv"
         };
 
         await Task.Run(() =>
