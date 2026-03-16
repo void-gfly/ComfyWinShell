@@ -208,23 +208,55 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
 
     private async Task<string?> ResolveQuickAccessPathAsync(string folderName)
     {
-        if (string.Equals(folderName, "extra-models", StringComparison.OrdinalIgnoreCase))
+    // 默认使用 ComfyUI 目录作为根路径
+    var comfyRoot = _comfyPathService.ComfyUiPath!;
+
+    // 对部分目录（input/output/extra-models）优先使用配置中的自定义路径
+    if (string.Equals(folderName, "input", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(folderName, "output", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(folderName, "extra-models", StringComparison.OrdinalIgnoreCase))
+    {
+        var profiles = await _profileService.GetProfilesAsync();
+        var defaultProfile = profiles.FirstOrDefault(profile => profile.IsDefault);
+        var profileId = defaultProfile?.Id ?? "default";
+        var configuration = await _configurationService.LoadConfigurationAsync(profileId);
+
+        if (string.Equals(folderName, "input", StringComparison.OrdinalIgnoreCase))
         {
-            var profiles = await _profileService.GetProfilesAsync();
-            var defaultProfile = profiles.FirstOrDefault(profile => profile.IsDefault);
-            var profileId = defaultProfile?.Id ?? "default";
-            var configuration = await _configurationService.LoadConfigurationAsync(profileId);
-            var extraModelBase = configuration.Paths.ExtraModelBaseDirectory;
-
-            if (!string.IsNullOrWhiteSpace(extraModelBase))
-            {
-                return extraModelBase;
-            }
-
-            return Path.Combine(_comfyPathService.ComfyUiPath!, "models");
+        var inputDir = configuration.Paths.InputDirectory;
+        if (!string.IsNullOrWhiteSpace(inputDir))
+        {
+            return inputDir;
         }
 
-        return Path.Combine(_comfyPathService.ComfyUiPath!, folderName);
+        return Path.Combine(comfyRoot, "input");
+        }
+
+        if (string.Equals(folderName, "output", StringComparison.OrdinalIgnoreCase))
+        {
+        var outputDir = configuration.Paths.OutputDirectory;
+        if (!string.IsNullOrWhiteSpace(outputDir))
+        {
+            return outputDir;
+        }
+
+        return Path.Combine(comfyRoot, "output");
+        }
+
+        if (string.Equals(folderName, "extra-models", StringComparison.OrdinalIgnoreCase))
+        {
+        var extraModelBase = configuration.Paths.ExtraModelBaseDirectory;
+        if (!string.IsNullOrWhiteSpace(extraModelBase))
+        {
+            return extraModelBase;
+        }
+
+        return Path.Combine(comfyRoot, "models");
+        }
+    }
+
+    // 其他按钮保持原有逻辑，相对 ComfyUI 目录
+    return Path.Combine(comfyRoot, folderName);
     }
 
     private static string? ResolveMainPath(string rootPath)
