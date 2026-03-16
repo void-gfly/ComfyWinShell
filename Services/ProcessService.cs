@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -114,6 +115,33 @@ public class ProcessService : IProcessService, IDisposable
         ConfigureApiEndpoint(configuration.Network.Listen, configuration.Network.Port);
         _stopRequestedByUser = false;
         _recoveryDeadlineUtc = null;
+
+        var existingProcess = FindExistingComfyProcess(_lastPythonPath!, _lastMainPath!);
+        if (existingProcess != null)
+        {
+            OutputReceived?.Invoke(this, $"[ProcessService] 检测到同副本已在运行(PID={existingProcess.Id})，跳过重复启动，转入连接检测。");
+            _process = existingProcess;
+            _process.EnableRaisingEvents = true;
+            _process.Exited -= OnProcessExited;
+            _process.Exited += OnProcessExited;
+
+            lock (_statusLock)
+            {
+                _status = new ProcessStatus
+                {
+                    VersionId = "local",
+                    State = ProcessState.Starting,
+                    IsRunning = true,
+                    ProcessId = existingProcess.Id,
+                    StartTime = DateTime.Now
+                };
+            }
+
+            StatusChanged?.Invoke(this, CreateStatusSnapshot());
+            StartHeartbeat();
+            StartWebSocketMonitor();
+            return Task.FromResult(true);
+        }
 
         var fullCommand = string.IsNullOrWhiteSpace(startInfo.Arguments)
             ? $"\"{startInfo.FileName}\""
@@ -940,8 +968,53 @@ public class ProcessService : IProcessService, IDisposable
             return false;
         }
 
-        return commandLine.Contains(mainPath, StringComparison.OrdinalIgnoreCase) &&
+        return IsMainScriptArgumentMatch(commandLine, mainPath) &&
                commandLine.Contains("--windows-standalone-build", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Process? FindExistingComfyProcess(string pythonPath, string mainPath)
+    {
+        foreach (var process in Process.GetProcessesByName("python"))
+        {
+            var shouldDispose = true;
+            try
+            {
+                if (process.HasExited)
+                {
+                    continue;
+                }
+
+                if (IsTargetComfyPythonProcess(process, pythonPath, mainPath))
+                {
+                    shouldDispose = false;
+                    return process;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError("检测已运行 ComfyUI 进程失败", ex);
+            }
+            
+            if (shouldDispose)
+            {
+                process.Dispose();
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsMainScriptArgumentMatch(string commandLine, string mainPath)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine) || string.IsNullOrWhiteSpace(mainPath))
+        {
+            return false;
+        }
+
+        // 严格匹配 `-s <main.py>` 参数，允许 main.py 带或不带引号
+        var escapedMainPath = Regex.Escape(mainPath);
+        var pattern = $@"(?:^|\s)-s\s+""?{escapedMainPath}""?(?:\s|$)";
+        return Regex.IsMatch(commandLine, pattern, RegexOptions.IgnoreCase);
     }
 
     private string? TryGetProcessCommandLine(int processId)
