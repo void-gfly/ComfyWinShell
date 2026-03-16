@@ -533,12 +533,9 @@ public class ProcessService : IProcessService, IDisposable
 
         try
         {
-            if (_webSocket is { State: WebSocketState.Open or WebSocketState.CloseReceived })
-            {
-                _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "shutdown", CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-            }
+            // 避免退出流程卡住：不阻塞等待 WebSocket close 握手
+            // 直接释放底层 socket，由取消令牌驱动监控循环退出。
+            _webSocket?.Abort();
         }
         catch
         {
@@ -548,9 +545,20 @@ public class ProcessService : IProcessService, IDisposable
         {
             _webSocket?.Dispose();
             _webSocket = null;
-            _webSocketCts?.Dispose();
-            _webSocketCts = null;
         }
+
+        try
+        {
+            _webSocketMonitorTask?.Wait(TimeSpan.FromMilliseconds(300));
+        }
+        catch
+        {
+            // ignored
+        }
+
+        _webSocketMonitorTask = null;
+        _webSocketCts?.Dispose();
+        _webSocketCts = null;
     }
 
     private async Task MonitorWebSocketLoopAsync(CancellationToken cancellationToken)
