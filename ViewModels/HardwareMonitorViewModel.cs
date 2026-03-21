@@ -2,6 +2,11 @@ using System.Collections.ObjectModel;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LiveChartsCore;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.Kernel.Sketches;
+using LiveChartsCore.SkiaSharpView;
+using SkiaSharp;
 using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 
@@ -12,6 +17,19 @@ namespace WpfDesktop.ViewModels;
 /// </summary>
 public partial class GpuDisplayInfo : ObservableObject
 {
+    public ObservableCollection<DateTimePoint> LoadHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> VramHistoryPoints { get; } = new();
+    public ObservableCollection<ISeries> GpuChartSeries { get; }
+
+    public GpuDisplayInfo()
+    {
+        GpuChartSeries = new ObservableCollection<ISeries>
+        {
+            HardwareMonitorChartFactory.CreateLineSeries("使用率", LoadHistoryPoints, new SKColor(0x21, 0x96, 0xF3)),
+            HardwareMonitorChartFactory.CreateLineSeries("显存占用率", VramHistoryPoints, new SKColor(0xFF, 0x98, 0x00))
+        };
+    }
+
     [ObservableProperty]
     private string _name = "Unknown GPU";
 
@@ -49,25 +67,62 @@ public partial class GpuDisplayInfo : ObservableObject
         OnPropertyChanged(nameof(MemoryText));
         OnPropertyChanged(nameof(MemoryPercent));
     }
+
+    /// <summary>图表时间窗内「使用率」序列的最大值（百分比）。</summary>
+    public string LoadChartPeakText { get; private set; } = PeakChartLabels.Empty;
+
+    /// <summary>图表时间窗内「显存占用率」折算的显存用量峰值（GB）。</summary>
+    public string VramChartPeakText { get; private set; } = PeakChartLabels.Empty;
+
+    public void UpdateChartPeakLabels()
+    {
+        LoadChartPeakText = PeakChartLabels.FormatPercentPeak(LoadHistoryPoints);
+        VramChartPeakText = PeakChartLabels.FormatVramPeakGb(VramHistoryPoints, MemoryTotal);
+        OnPropertyChanged(nameof(LoadChartPeakText));
+        OnPropertyChanged(nameof(VramChartPeakText));
+    }
 }
 
 public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 {
+    private const int MaxHistoryPoints = (HardwareMonitorChartFactory.WindowMinutes * 60) / HardwareMonitorChartFactory.SampleIntervalSeconds;
+
     private readonly IHardwareMonitorService _hardwareMonitorService;
     private readonly ILogService _logService;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
+
+    public ObservableCollection<DateTimePoint> CpuLoadHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> MemoryHistoryPoints { get; } = new();
+
+    public ObservableCollection<ISeries> CpuChartSeries { get; }
+    public ObservableCollection<ISeries> MemoryChartSeries { get; }
+
+    public ObservableCollection<ICartesianAxis> ChartXAxes { get; }
+    public ObservableCollection<ICartesianAxis> ChartYAxes { get; }
 
     public HardwareMonitorViewModel(IHardwareMonitorService hardwareMonitorService, ILogService logService)
     {
         _hardwareMonitorService = hardwareMonitorService;
         _logService = logService;
 
+        ChartXAxes = HardwareMonitorChartFactory.CreateTimeXAxes();
+        ChartYAxes = HardwareMonitorChartFactory.CreatePercentYAxes();
+
+        CpuChartSeries = new ObservableCollection<ISeries>
+        {
+            HardwareMonitorChartFactory.CreateLineSeries("CPU 使用率", CpuLoadHistoryPoints, new SKColor(0x4C, 0xAF, 0x50))
+        };
+        MemoryChartSeries = new ObservableCollection<ISeries>
+        {
+            HardwareMonitorChartFactory.CreateLineSeries("内存占用率", MemoryHistoryPoints, new SKColor(0x9C, 0x27, 0xB0))
+        };
+
         RefreshCommand = new RelayCommand(Refresh);
 
         _timer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(2)
+            Interval = TimeSpan.FromSeconds(HardwareMonitorChartFactory.SampleIntervalSeconds)
         };
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
@@ -103,6 +158,14 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private bool _isMonitoring = true;
+
+    /// <summary>CPU 图表时间窗内使用率峰值。</summary>
+    [ObservableProperty]
+    private string _cpuChartPeakText = PeakChartLabels.Empty;
+
+    /// <summary>内存图表时间窗内占用峰值（按当前总内存折算为 GB）。</summary>
+    [ObservableProperty]
+    private string _memoryChartPeakText = PeakChartLabels.Empty;
 
     public IRelayCommand RefreshCommand { get; }
 
@@ -142,7 +205,6 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             CpuTemperature = snapshot.CpuTemperatureC;
             CpuFanRpm = snapshot.CpuFanRpm;
 
-            // 更新 GPU 列表
             UpdateGpuList(snapshot.Gpus);
 
             MemoryUsed = snapshot.MemoryUsedMb;
@@ -155,6 +217,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(CpuFanText));
             OnPropertyChanged(nameof(MemoryText));
             OnPropertyChanged(nameof(MemoryPercent));
+
+            AppendHistoryAndTrim(snapshot);
         }
         catch (Exception ex)
         {
@@ -162,15 +226,94 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void AppendHistoryAndTrim(HwInfoSnapshot snapshot)
+    {
+        var now = DateTime.Now;
+
+        AppendPoint(CpuLoadHistoryPoints, snapshot.CpuLoadPercent, now);
+
+        var memPct = snapshot.MemoryTotalMb is > 0 && snapshot.MemoryUsedMb is { } used
+            ? used / snapshot.MemoryTotalMb.Value * 100
+            : (double?)null;
+        AppendPoint(MemoryHistoryPoints, memPct, now);
+
+        for (var i = 0; i < Gpus.Count && i < snapshot.Gpus.Count; i++)
+        {
+            var g = snapshot.Gpus[i];
+            var display = Gpus[i];
+            AppendPoint(display.LoadHistoryPoints, g.LoadPercent, now);
+
+            var vramPct = g.MemoryTotalMb is > 0 && g.MemoryUsedMb is { } mu
+                ? mu / g.MemoryTotalMb.Value * 100
+                : (double?)null;
+            AppendPoint(display.VramHistoryPoints, vramPct, now);
+        }
+
+        TrimWindow(CpuLoadHistoryPoints, now);
+        TrimWindow(MemoryHistoryPoints, now);
+        foreach (var gpu in Gpus)
+        {
+            TrimWindow(gpu.LoadHistoryPoints, now);
+            TrimWindow(gpu.VramHistoryPoints, now);
+        }
+
+        UpdateAxisLimits(now);
+        UpdateChartPeakLabels();
+    }
+
+    private void UpdateChartPeakLabels()
+    {
+        CpuChartPeakText = PeakChartLabels.FormatPercentPeak(CpuLoadHistoryPoints);
+        MemoryChartPeakText = PeakChartLabels.FormatMemoryPeakGb(MemoryHistoryPoints, MemoryTotal);
+        foreach (var gpu in Gpus)
+        {
+            gpu.UpdateChartPeakLabels();
+        }
+    }
+
+    private static void AppendPoint(ObservableCollection<DateTimePoint> points, double? value, DateTime now)
+    {
+        if (!value.HasValue)
+        {
+            return;
+        }
+
+        points.Add(new DateTimePoint(now, value.Value));
+    }
+
+    private static void TrimWindow(ObservableCollection<DateTimePoint> points, DateTime now)
+    {
+        var cutoff = now - HardwareMonitorChartFactory.WindowDuration;
+        while (points.Count > 0 && points[0].DateTime < cutoff)
+        {
+            points.RemoveAt(0);
+        }
+
+        while (points.Count > MaxHistoryPoints)
+        {
+            points.RemoveAt(0);
+        }
+    }
+
+    private void UpdateAxisLimits(DateTime now)
+    {
+        if (ChartXAxes.Count == 0 || ChartXAxes[0] is not Axis xAxis)
+        {
+            return;
+        }
+
+        xAxis.MinLimit = now.Subtract(HardwareMonitorChartFactory.WindowDuration).Ticks;
+        xAxis.MaxLimit = now.Ticks;
+    }
+
     private void UpdateGpuList(List<GpuInfoSnapshot> gpuSnapshots)
     {
-        // 如果 GPU 数量变化，重建列表
         if (Gpus.Count != gpuSnapshots.Count)
         {
             Gpus.Clear();
             foreach (var gpu in gpuSnapshots)
             {
-                Gpus.Add(new GpuDisplayInfo
+                var display = new GpuDisplayInfo
                 {
                     Name = gpu.Name,
                     Load = gpu.LoadPercent,
@@ -178,24 +321,24 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
                     FanRpm = gpu.FanRpm,
                     MemoryUsed = gpu.MemoryUsedMb,
                     MemoryTotal = gpu.MemoryTotalMb
-                });
+                };
+                Gpus.Add(display);
             }
+
+            return;
         }
-        else
+
+        for (var i = 0; i < gpuSnapshots.Count; i++)
         {
-            // 更新现有项
-            for (var i = 0; i < gpuSnapshots.Count; i++)
-            {
-                var gpu = gpuSnapshots[i];
-                var display = Gpus[i];
-                display.Name = gpu.Name;
-                display.Load = gpu.LoadPercent;
-                display.Temperature = gpu.TemperatureC;
-                display.FanRpm = gpu.FanRpm;
-                display.MemoryUsed = gpu.MemoryUsedMb;
-                display.MemoryTotal = gpu.MemoryTotalMb;
-                display.NotifyAllChanged();
-            }
+            var gpu = gpuSnapshots[i];
+            var display = Gpus[i];
+            display.Name = gpu.Name;
+            display.Load = gpu.LoadPercent;
+            display.Temperature = gpu.TemperatureC;
+            display.FanRpm = gpu.FanRpm;
+            display.MemoryUsed = gpu.MemoryUsedMb;
+            display.MemoryTotal = gpu.MemoryTotalMb;
+            display.NotifyAllChanged();
         }
     }
 

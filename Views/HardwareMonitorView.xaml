@@ -8,14 +8,13 @@
              d:DesignHeight="500" d:DesignWidth="800">
 
     <UserControl.Resources>
-        <!-- Compact Styles for High Density Dashboard -->
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="#141414"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="15,12"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
-        
+
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -35,17 +34,10 @@
             <Setter Property="Opacity" Value="0.5"/>
             <Setter Property="Margin" Value="0,0,0,2"/>
         </Style>
-
-        <Style x:Key="CompactProgressBarStyle" TargetType="ProgressBar">
-            <Setter Property="Height" Value="3"/>
-            <Setter Property="Margin" Value="0,6,0,0"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="15,10">
         <StackPanel>
-            <!-- Header -->
             <Grid Margin="0,0,0,15">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -59,10 +51,11 @@
                 </StackPanel>
             </Grid>
 
-            <!-- CPU Section -->
+            <!-- CPU -->
             <Border Style="{StaticResource CardStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -76,36 +69,67 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- CPU Load -->
                         <StackPanel Grid.Column="0" Margin="0,0,10,0">
                             <TextBlock Text="使用率" Style="{StaticResource MetricLabelStyle}"/>
-                            <TextBlock Text="{Binding CpuLoadText}" Style="{StaticResource MetricValueStyle}"/>
-                            <ProgressBar Value="{Binding CpuLoad, TargetNullValue=0}" Maximum="100"
-                                         Style="{StaticResource CompactProgressBarStyle}" Foreground="#4CAF50"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding CpuLoadText}" Style="{StaticResource MetricValueStyle}"/>
+                                <TextBlock Text="{Binding CpuChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
+                            </StackPanel>
                         </StackPanel>
 
-                        <!-- CPU Temperature -->
                         <StackPanel Grid.Column="1" Margin="0,0,10,0">
                             <TextBlock Text="温度" Style="{StaticResource MetricLabelStyle}"/>
                             <TextBlock Text="{Binding CpuTemperatureText}" Style="{StaticResource MetricValueStyle}"/>
                         </StackPanel>
 
-                        <!-- CPU Fan -->
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="风扇转速" Style="{StaticResource MetricLabelStyle}"/>
                             <TextBlock Text="{Binding CpuFanText}" Style="{StaticResource MetricValueStyle}"/>
                         </StackPanel>
                     </Grid>
+
+                    <Border x:Name="CpuChartHost" Grid.Row="2" Margin="0,12,0,0" Height="200"/>
                 </Grid>
             </Border>
 
-            <!-- GPU Section -->
+            <!-- Memory -->
+            <Border Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="内存" Style="{StaticResource SectionTitleStyle}"/>
+
+                    <StackPanel Grid.Row="1">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="使用量" FontSize="11" Opacity="0.5"/>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="{Binding MemoryText}" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding MemoryChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <Border x:Name="MemoryChartHost" Grid.Row="2" Margin="0,8,0,0" Height="200"/>
+                </Grid>
+            </Border>
+
+            <!-- GPU -->
             <ItemsControl ItemsSource="{Binding Gpus}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Style="{StaticResource CardStyle}">
                             <Grid>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -122,9 +146,10 @@
 
                                     <StackPanel Grid.Column="0" Margin="0,0,10,0">
                                         <TextBlock Text="使用率" Style="{StaticResource MetricLabelStyle}"/>
-                                        <TextBlock Text="{Binding LoadText}" Style="{StaticResource MetricValueStyle}"/>
-                                        <ProgressBar Value="{Binding Load, TargetNullValue=0}" Maximum="100"
-                                                     Style="{StaticResource CompactProgressBarStyle}" Foreground="#2196F3"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding LoadText}" Style="{StaticResource MetricValueStyle}"/>
+                                            <TextBlock Text="{Binding LoadChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
+                                        </StackPanel>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Margin="0,0,10,0">
@@ -138,8 +163,7 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <!-- GPU Memory -->
-                                <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                                <StackPanel Grid.Row="2" Margin="0,8,0,0">
                                     <Grid Margin="0,0,0,4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -147,44 +171,20 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="显存" FontSize="11" Opacity="0.5"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding MemoryText}" FontSize="11" FontWeight="Medium"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding MemoryText}" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding VramChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                     </Grid>
-                                    <ProgressBar Value="{Binding MemoryPercent, Mode=OneWay}" Maximum="100"
-                                                 Height="3" Foreground="#FF9800" BorderThickness="0"/>
                                 </StackPanel>
+
+                                <local:GpuChartHostControl Grid.Row="3" Margin="0,8,0,0"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Memory Section -->
-            <Border Style="{StaticResource CardStyle}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Text="内存" Style="{StaticResource SectionTitleStyle}"/>
-
-                    <StackPanel Grid.Row="1">
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="使用量" FontSize="11" Opacity="0.5"/>
-                            <TextBlock Grid.Column="2" Text="{Binding MemoryText}" FontSize="11" FontWeight="Medium"/>
-                        </Grid>
-                        <ProgressBar Value="{Binding MemoryPercent, Mode=OneWay}" Maximum="100"
-                                     Height="3" Foreground="#9C27B0" BorderThickness="0"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Last Update -->
             <TextBlock HorizontalAlignment="Right" Opacity="0.3" FontSize="10" Margin="0,5,0,10">
                 <Run Text="最后更新: "/>
                 <Run Text="{Binding LastUpdateTime}"/>
