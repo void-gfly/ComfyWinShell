@@ -249,14 +249,22 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         IProgress<string>? progress)
     {
         var filesCopied = 0;
+        var rootExcludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "models", "input", "output", "temp"
+        };
         var excludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "models", "input", "output", "temp", "__pycache__", ".git", ".vscode", ".idea", "venv", ".venv"
+            "__pycache__", ".vscode", ".idea", "venv", ".venv"
+        };
+        var nestedExcludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".git"
         };
 
         await Task.Run(() =>
         {
-            CopyDirectoryRecursive(sourcePath, targetPath, excludedDirs, ref filesCopied, progress);
+            CopyDirectoryRecursive(sourcePath, targetPath, rootExcludedDirs, excludedDirs, nestedExcludedDirs, depth: 0, ref filesCopied, progress);
         });
 
         return filesCopied;
@@ -281,14 +289,19 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             pythonRuntimePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var targetPythonPath = Path.Combine(targetPath, runtimeDirName);
         var filesCopied = 0;
+        var rootExcludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var excludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "__pycache__"
         };
+        var nestedExcludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".git"
+        };
 
         await Task.Run(() =>
         {
-            CopyDirectoryRecursive(pythonRuntimePath, targetPythonPath, excludedDirs, ref filesCopied, progress);
+            CopyDirectoryRecursive(pythonRuntimePath, targetPythonPath, rootExcludedDirs, excludedDirs, nestedExcludedDirs, depth: 0, ref filesCopied, progress);
         });
 
         return filesCopied;
@@ -300,7 +313,10 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     private void CopyDirectoryRecursive(
         string sourceDir,
         string targetDir,
+        HashSet<string> rootExcludedDirs,
         HashSet<string> excludedDirs,
+        HashSet<string> nestedExcludedDirs,
+        int depth,
         ref int filesCopied,
         IProgress<string>? progress)
     {
@@ -336,13 +352,16 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         {
             var dirName = Path.GetFileName(dir);
 
-            if (excludedDirs.Contains(dirName))
+            var isExcluded = excludedDirs.Contains(dirName) ||
+                             (depth > 0 && nestedExcludedDirs.Contains(dirName)) ||
+                             (depth == 0 && rootExcludedDirs.Contains(dirName));
+            if (isExcluded)
             {
                 continue;
             }
 
             var targetSubDir = Path.Combine(targetDir, dirName);
-            CopyDirectoryRecursive(dir, targetSubDir, excludedDirs, ref filesCopied, progress);
+            CopyDirectoryRecursive(dir, targetSubDir, rootExcludedDirs, excludedDirs, nestedExcludedDirs, depth + 1, ref filesCopied, progress);
         }
     }
 
