@@ -28,7 +28,7 @@ public class ConfigurationService : IConfigurationService
     public async Task<ComfyConfiguration> LoadConfigurationAsync(string profileId)
     {
         var profile = await LoadProfileAsync(profileId);
-        return profile?.Configuration ?? new ComfyConfiguration();
+        return NormalizeConfiguration(profile?.Configuration ?? new ComfyConfiguration());
     }
 
     public async Task SaveConfigurationAsync(string profileId, ComfyConfiguration configuration)
@@ -88,5 +88,16 @@ public class ConfigurationService : IConfigurationService
     private string GetProfilePath(string profileId)
     {
         return Path.Combine(_profilesDirectory, $"{profileId}.json");
+    }
+
+    private static ComfyConfiguration NormalizeConfiguration(ComfyConfiguration configuration)
+    {
+        var extraModelBaseDirectory = configuration.Paths.ExtraModelBaseDirectory;
+        if (!string.IsNullOrWhiteSpace(extraModelBaseDirectory) && !Directory.Exists(extraModelBaseDirectory))
+        {
+            configuration.Paths.ExtraModelBaseDirectory = null;
+        }
+
+        return configuration;
     }
 }
