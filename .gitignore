@@ -369,3 +369,4 @@ FodyWeavers.xsd
 comfyUIWorkFlow
 .vscode/
 *.zip
+/test_pc.cs
