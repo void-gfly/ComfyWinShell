@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -17,6 +18,8 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
     private readonly IResourceService _resourceService;
     private readonly ILogService _logService;
     private readonly IWorkflowAnalyzerService _workflowAnalyzerService;
+    private string _workflowSortProperty = WorkflowSortingHelper.DefaultProperty;
+    private ListSortDirection _workflowSortDirection = WorkflowSortingHelper.DefaultDirection;
 
     public ResourcesViewModel(
         IComfyPathService comfyPathService,
@@ -310,6 +313,18 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     #region Private Methods
 
+    public void SortWorkflows(string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(propertyName) || Workflows.Count == 0)
+        {
+            return;
+        }
+
+        _workflowSortDirection = WorkflowSortingHelper.GetNextDirection(propertyName, _workflowSortProperty, _workflowSortDirection);
+        _workflowSortProperty = propertyName;
+        ApplyWorkflowSorting();
+    }
+
     private void ClearData()
     {
         DetachWorkflowSelectionHandlers(Workflows);
@@ -420,9 +435,17 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         });
 
         var workflows = await _resourceService.GetWorkflowsAsync();
+        var sortedWorkflows = WorkflowSortingHelper.Sort(
+            workflows,
+            WorkflowSortingHelper.DefaultProperty,
+            WorkflowSortingHelper.DefaultDirection);
+
         RunOnUiThread(() =>
         {
-            foreach (var workflow in workflows)
+            _workflowSortProperty = WorkflowSortingHelper.DefaultProperty;
+            _workflowSortDirection = WorkflowSortingHelper.DefaultDirection;
+
+            foreach (var workflow in sortedWorkflows)
             {
                 Workflows.Add(workflow);
                 workflow.PropertyChanged += OnWorkflowPropertyChanged;
@@ -431,6 +454,17 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
             UpdateSelectedWorkflowCount();
             RefreshWorkflowCommandStates();
         });
+    }
+
+    private void ApplyWorkflowSorting()
+    {
+        var sortedWorkflows = WorkflowSortingHelper.Sort(Workflows, _workflowSortProperty, _workflowSortDirection);
+
+        Workflows.Clear();
+        foreach (var workflow in sortedWorkflows)
+        {
+            Workflows.Add(workflow);
+        }
     }
 
     partial void OnSelectedWorkflowCountChanged(int value)

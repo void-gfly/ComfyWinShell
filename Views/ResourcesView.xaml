@@ -355,13 +355,17 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <ListView Grid.Row="1"
+                        <ListView x:Name="WorkflowsListView"
+                                  Grid.Row="1"
                                   ItemsSource="{Binding Workflows}"
                                   BorderThickness="0"
                                   Background="Transparent">
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="选择" Width="50">
+                                    <GridViewColumn Width="50">
+                                        <GridViewColumn.Header>
+                                            <GridViewColumnHeader Content="选择"/>
+                                        </GridViewColumn.Header>
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -370,7 +374,10 @@
                                             </DataTemplate>
                                         </GridViewColumn.CellTemplate>
                                     </GridViewColumn>
-                                    <GridViewColumn Header="文件名" Width="260">
+                                    <GridViewColumn Width="260">
+                                        <GridViewColumn.Header>
+                                            <GridViewColumnHeader Content="文件名" Tag="Name"/>
+                                        </GridViewColumn.Header>
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding Name}" 
@@ -380,7 +387,10 @@
                                             </DataTemplate>
                                         </GridViewColumn.CellTemplate>
                                     </GridViewColumn>
-                                    <GridViewColumn Header="大小" Width="100">
+                                    <GridViewColumn Width="100">
+                                        <GridViewColumn.Header>
+                                            <GridViewColumnHeader Content="大小" Tag="SizeBytes"/>
+                                        </GridViewColumn.Header>
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding SizeDisplay}" 
@@ -389,7 +399,10 @@
                                             </DataTemplate>
                                         </GridViewColumn.CellTemplate>
                                     </GridViewColumn>
-                                    <GridViewColumn Header="修改时间" Width="150">
+                                    <GridViewColumn Width="150">
+                                        <GridViewColumn.Header>
+                                            <GridViewColumnHeader Content="修改时间" Tag="LastModified"/>
+                                        </GridViewColumn.Header>
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding LastModified, StringFormat={}{0:yyyy-MM-dd HH:mm}}" 
@@ -397,7 +410,10 @@
                                             </DataTemplate>
                                         </GridViewColumn.CellTemplate>
                                     </GridViewColumn>
-                                    <GridViewColumn Header="操作" Width="140">
+                                    <GridViewColumn Width="140">
+                                        <GridViewColumn.Header>
+                                            <GridViewColumnHeader Content="操作"/>
+                                        </GridViewColumn.Header>
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <StackPanel Orientation="Horizontal">

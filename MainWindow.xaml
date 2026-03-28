@@ -329,11 +329,14 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
-                        <Border Background="Transparent" Padding="2,0">
+                    <Grid Grid.Column="0" Margin="0,0,20,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="Transparent" Padding="2,0">
                             <Border.ToolTip>
                                 <ToolTip Placement="Top"
                                          Background="Transparent"
@@ -442,7 +445,8 @@
                             <TextBlock Text="{Binding StatusBarText}" VerticalAlignment="Center" FontSize="12"/>
                         </Border>
                         <!-- Last Log Line -->
-                        <TextBlock Text="{Binding LastLogLine}"
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding LastLogLine}"
                                    Foreground="#808080"
                                    FontFamily="Consolas, Courier New, Monospace"
                                    FontSize="12"
@@ -459,9 +463,9 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                    </StackPanel>
+                    </Grid>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                          <TextBlock Text="{Binding AppVersionText}" Opacity="0.6" VerticalAlignment="Center" FontSize="12"/>
                     </StackPanel>
                 </Grid>
