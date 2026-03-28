@@ -39,24 +39,7 @@
 ```
 
 ## 4. 测试（当前仓库无测试项目）
-- 未发现 `*Tests*.csproj` 测试工程
-- 若未来新增测试工程，可使用以下模式：
-
-```bash
-# 运行指定测试项目
- dotnet test path/to/Project.Tests.csproj
-
-# 运行单个测试（推荐用 FullyQualifiedName 精确匹配）
- dotnet test --filter FullyQualifiedName=Namespace.ClassName.MethodName
-
-# 运行某个类所有测试
- dotnet test --filter FullyQualifiedName~Namespace.ClassName
-```
-
-`--filter` 语法概览（.NET 官方文档）：
-- 表达式格式：`<Property><Operator><Value>[|&<Expression>]`
-- 常见属性：`FullyQualifiedName`, `Name`, `DisplayName`, `TestCategory`, `Priority`
-- 操作符：`=`, `!=`, `~`, `!~`
+- 本项目人工测试,无需创建测试项目
 
 ## 5. Lint / 格式化
 - 未发现 `.editorconfig` 或专用格式化配置
