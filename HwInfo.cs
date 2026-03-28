@@ -34,6 +34,10 @@ namespace WpfDesktop.Services
         private readonly ILogService? _logService;
         private bool _disposed;
 
+        private System.Diagnostics.PerformanceCounter? _diskReadCounter;
+        private System.Diagnostics.PerformanceCounter? _diskWriteCounter;
+        private bool _perfCountersInitialized;
+
         public HwInfo(ILogService? logService = null)
         {
             _logService = logService;
@@ -43,7 +47,8 @@ namespace WpfDesktop.Services
                 IsGpuEnabled = true,
                 IsMemoryEnabled = true,
                 IsMotherboardEnabled = true,
-                IsControllerEnabled = true
+                IsControllerEnabled = true,
+                IsStorageEnabled = true
             };
             try
             {
@@ -77,10 +82,12 @@ namespace WpfDesktop.Services
             var gpuHardwareList = EnumerateHardware(_computer).Where(IsGpuHardware).ToList();
             var memoryHardware = EnumerateHardware(_computer).Where(h => h.HardwareType == HardwareType.Memory).ToList();
             var motherboardHardware = EnumerateHardware(_computer).Where(h => h.HardwareType == HardwareType.Motherboard).ToList();
+            var storageHardware = EnumerateHardware(_computer).Where(h => h.HardwareType == HardwareType.Storage).ToList();
 
             var cpuSensors = cpuHardware.SelectMany(GetAllSensors).ToList();
             var memorySensors = memoryHardware.SelectMany(GetAllSensors).ToList();
             var motherboardSensors = motherboardHardware.SelectMany(GetAllSensors).ToList();
+            var storageSensors = storageHardware.SelectMany(GetAllSensors).ToList();
 
             var cpuName = cpuHardware.FirstOrDefault()?.Name ?? "CPU";
             var cpuLoad = SelectLoad(cpuSensors, "cpu total", "total");
@@ -88,6 +95,8 @@ namespace WpfDesktop.Services
             var cpuFan = SelectFanRpm(cpuSensors, "cpu") ?? SelectFanRpm(motherboardSensors, "cpu");
 
             var (memUsed, memTotal) = SelectMemoryUsage(memorySensors, preferPhysicalMemory: true);
+
+            var (diskReadMb, diskWriteMb) = SelectDiskRates(storageSensors);
 
             // 收集每个 GPU 的信息
             var gpus = new List<GpuInfoSnapshot>();
@@ -119,7 +128,9 @@ namespace WpfDesktop.Services
                 CpuFanRpm = cpuFan,
                 Gpus = gpus,
                 MemoryUsedMb = memUsed,
-                MemoryTotalMb = memTotal
+                MemoryTotalMb = memTotal,
+                DiskReadRateMb = diskReadMb,
+                DiskWriteRateMb = diskWriteMb
             };
         }
 
@@ -134,6 +145,10 @@ namespace WpfDesktop.Services
             {
                 _computer.Close();
             }
+
+            _diskReadCounter?.Dispose();
+            _diskWriteCounter?.Dispose();
+
             _disposed = true;
         }
 
@@ -235,6 +250,69 @@ namespace WpfDesktop.Services
             }
 
             return values.Max();
+        }
+
+        private (double? readMb, double? writeMb) SelectDiskRates(IEnumerable<ISensor> sensors)
+        {
+            var rateSensors = sensors.Where(s => s.SensorType == SensorType.Throughput || s.SensorType == SensorType.Data || s.SensorType == SensorType.SmallData).ToList();
+            var readRates = rateSensors.Where(s => s.Name?.IndexOf("Read Rate", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            var writeRates = rateSensors.Where(s => s.Name?.IndexOf("Write Rate", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            var readBytesPerSec = readRates.Sum(s => s.Value ?? 0);
+            var writeBytesPerSec = writeRates.Sum(s => s.Value ?? 0);
+
+            if (readRates.Count == 0 && writeRates.Count == 0)
+            {
+                return GetDiskRateFromPerformanceCounters();
+            }
+
+            var readMbPerSec = readBytesPerSec / (1024.0 * 1024.0);
+            var writeMbPerSec = writeBytesPerSec / (1024.0 * 1024.0);
+
+            return (readRates.Count > 0 ? readMbPerSec : null, writeRates.Count > 0 ? writeMbPerSec : null);
+        }
+
+        private (double? readMb, double? writeMb) GetDiskRateFromPerformanceCounters()
+        {
+            if (!_perfCountersInitialized)
+            {
+                _perfCountersInitialized = true;
+                try
+                {
+#pragma warning disable CA1416
+                    _diskReadCounter = new System.Diagnostics.PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total", true);
+                    _diskWriteCounter = new System.Diagnostics.PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total", true);
+                    _diskReadCounter.NextValue();
+                    _diskWriteCounter.NextValue();
+#pragma warning restore CA1416
+                }
+                catch (Exception ex)
+                {
+                    _logService?.LogError("磁盘性能计数器初始化失败(非管理员可能引发)", ex);
+                    _diskReadCounter?.Dispose();
+                    _diskWriteCounter?.Dispose();
+                    _diskReadCounter = null;
+                    _diskWriteCounter = null;
+                }
+            }
+
+            if (_diskReadCounter != null && _diskWriteCounter != null)
+            {
+                try
+                {
+#pragma warning disable CA1416
+                    double readMb = _diskReadCounter.NextValue() / (1024.0 * 1024.0);
+                    double writeMb = _diskWriteCounter.NextValue() / (1024.0 * 1024.0);
+                    return (readMb, writeMb);
+#pragma warning restore CA1416
+                }
+                catch
+                {
+                    return (null, null);
+                }
+            }
+
+            return (null, null);
         }
 
         private (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors, bool preferPhysicalMemory = false)
@@ -425,6 +503,8 @@ namespace WpfDesktop.Services
         public double? CpuFanRpm { get; set; }
         public double? MemoryUsedMb { get; set; }
         public double? MemoryTotalMb { get; set; }
+        public double? DiskReadRateMb { get; set; }
+        public double? DiskWriteRateMb { get; set; }
 
         /// <summary>
         /// 所有 GPU 的信息列表

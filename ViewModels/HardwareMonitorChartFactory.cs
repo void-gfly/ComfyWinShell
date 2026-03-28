@@ -22,7 +22,8 @@ internal static class HardwareMonitorChartFactory
     public static LineSeries<DateTimePoint> CreateLineSeries(
         string name,
         ObservableCollection<DateTimePoint> values,
-        SKColor stroke)
+        SKColor stroke,
+        string tooltipUnit = "%")
     {
         return new LineSeries<DateTimePoint>
         {
@@ -31,7 +32,7 @@ internal static class HardwareMonitorChartFactory
             GeometrySize = 0,
             Fill = null,
             Stroke = new SolidColorPaint(stroke) { StrokeThickness = 2 },
-            YToolTipLabelFormatter = p => $"{p.Coordinate.PrimaryValue:F1}%"
+            YToolTipLabelFormatter = p => $"{p.Coordinate.PrimaryValue:F1}{tooltipUnit}"
         };
     }
 
@@ -61,6 +62,24 @@ internal static class HardwareMonitorChartFactory
                 MinLimit = 0,
                 MaxLimit = 100,
                 Name = "%",
+                NamePaint = new SolidColorPaint(AxisLabelColor),
+                LabelsPaint = new SolidColorPaint(AxisLabelColor),
+                SeparatorsPaint = new SolidColorPaint(AxisSeparatorColor) { StrokeThickness = 1 },
+                SubseparatorsPaint = new SolidColorPaint(AxisSeparatorColor.WithAlpha(90)) { StrokeThickness = 0.75f },
+                TicksPaint = new SolidColorPaint(AxisTickColor) { StrokeThickness = 1 }
+            }
+        };
+    }
+
+    public static ObservableCollection<ICartesianAxis> CreateSpeedYAxes(string name = "MB/s")
+    {
+        return new ObservableCollection<ICartesianAxis>
+        {
+            new Axis
+            {
+                MinLimit = 0,
+                MaxLimit = 5000,
+                Name = name,
                 NamePaint = new SolidColorPaint(AxisLabelColor),
                 LabelsPaint = new SolidColorPaint(AxisLabelColor),
                 SeparatorsPaint = new SolidColorPaint(AxisSeparatorColor) { StrokeThickness = 1 },

@@ -94,12 +94,16 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<DateTimePoint> CpuLoadHistoryPoints { get; } = new();
     public ObservableCollection<DateTimePoint> MemoryHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> DiskReadHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> DiskWriteHistoryPoints { get; } = new();
 
     public ObservableCollection<ISeries> CpuChartSeries { get; }
     public ObservableCollection<ISeries> MemoryChartSeries { get; }
+    public ObservableCollection<ISeries> DiskChartSeries { get; }
 
     public ObservableCollection<ICartesianAxis> ChartXAxes { get; }
     public ObservableCollection<ICartesianAxis> ChartYAxes { get; }
+    public ObservableCollection<ICartesianAxis> DiskChartYAxes { get; }
 
     public HardwareMonitorViewModel(IHardwareMonitorService hardwareMonitorService, ILogService logService)
     {
@@ -108,6 +112,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
         ChartXAxes = HardwareMonitorChartFactory.CreateTimeXAxes();
         ChartYAxes = HardwareMonitorChartFactory.CreatePercentYAxes();
+        DiskChartYAxes = HardwareMonitorChartFactory.CreateSpeedYAxes();
 
         CpuChartSeries = new ObservableCollection<ISeries>
         {
@@ -116,6 +121,11 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         MemoryChartSeries = new ObservableCollection<ISeries>
         {
             HardwareMonitorChartFactory.CreateLineSeries("内存占用率", MemoryHistoryPoints, new SKColor(0x9C, 0x27, 0xB0))
+        };
+        DiskChartSeries = new ObservableCollection<ISeries>
+        {
+            HardwareMonitorChartFactory.CreateLineSeries("读取", DiskReadHistoryPoints, new SKColor(0x00, 0xBC, 0xD4), " MB/s"),
+            HardwareMonitorChartFactory.CreateLineSeries("写入", DiskWriteHistoryPoints, new SKColor(0xFF, 0x57, 0x22), " MB/s")
         };
 
         RefreshCommand = new RelayCommand(Refresh);
@@ -154,6 +164,12 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     private double? _memoryTotal;
 
     [ObservableProperty]
+    private double? _diskReadRate;
+
+    [ObservableProperty]
+    private double? _diskWriteRate;
+
+    [ObservableProperty]
     private string _lastUpdateTime = "";
 
     [ObservableProperty]
@@ -166,6 +182,12 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     /// <summary>内存图表时间窗内占用峰值（按当前总内存折算为 GB）。</summary>
     [ObservableProperty]
     private string _memoryChartPeakText = PeakChartLabels.Empty;
+
+    [ObservableProperty]
+    private string _diskReadChartPeakText = PeakChartLabels.Empty;
+
+    [ObservableProperty]
+    private string _diskWriteChartPeakText = PeakChartLabels.Empty;
 
     public IRelayCommand RefreshCommand { get; }
 
@@ -180,6 +202,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     public double MemoryPercent => MemoryUsed.HasValue && MemoryTotal.HasValue && MemoryTotal > 0
         ? MemoryUsed.Value / MemoryTotal.Value * 100
         : 0;
+
+    public string DiskReadText => DiskReadRate.HasValue ? $"{DiskReadRate:F1} MB/s" : "N/A";
+    public string DiskWriteText => DiskWriteRate.HasValue ? $"{DiskWriteRate:F1} MB/s" : "N/A";
 
     partial void OnIsMonitoringChanged(bool value)
     {
@@ -210,6 +235,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             MemoryUsed = snapshot.MemoryUsedMb;
             MemoryTotal = snapshot.MemoryTotalMb;
 
+            DiskReadRate = snapshot.DiskReadRateMb;
+            DiskWriteRate = snapshot.DiskWriteRateMb;
+
             LastUpdateTime = DateTime.Now.ToString("HH:mm:ss");
 
             OnPropertyChanged(nameof(CpuLoadText));
@@ -217,6 +245,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(CpuFanText));
             OnPropertyChanged(nameof(MemoryText));
             OnPropertyChanged(nameof(MemoryPercent));
+            OnPropertyChanged(nameof(DiskReadText));
+            OnPropertyChanged(nameof(DiskWriteText));
 
             AppendHistoryAndTrim(snapshot);
         }
@@ -237,6 +267,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             : (double?)null;
         AppendPoint(MemoryHistoryPoints, memPct, now);
 
+        AppendPoint(DiskReadHistoryPoints, snapshot.DiskReadRateMb, now);
+        AppendPoint(DiskWriteHistoryPoints, snapshot.DiskWriteRateMb, now);
+
         for (var i = 0; i < Gpus.Count && i < snapshot.Gpus.Count; i++)
         {
             var g = snapshot.Gpus[i];
@@ -251,6 +284,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
         TrimWindow(CpuLoadHistoryPoints, now);
         TrimWindow(MemoryHistoryPoints, now);
+        TrimWindow(DiskReadHistoryPoints, now);
+        TrimWindow(DiskWriteHistoryPoints, now);
         foreach (var gpu in Gpus)
         {
             TrimWindow(gpu.LoadHistoryPoints, now);
@@ -265,6 +300,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     {
         CpuChartPeakText = PeakChartLabels.FormatPercentPeak(CpuLoadHistoryPoints);
         MemoryChartPeakText = PeakChartLabels.FormatMemoryPeakGb(MemoryHistoryPoints, MemoryTotal);
+        DiskReadChartPeakText = PeakChartLabels.FormatSpeedPeak(DiskReadHistoryPoints);
+        DiskWriteChartPeakText = PeakChartLabels.FormatSpeedPeak(DiskWriteHistoryPoints);
         foreach (var gpu in Gpus)
         {
             gpu.UpdateChartPeakLabels();

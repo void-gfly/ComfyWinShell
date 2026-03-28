@@ -41,6 +41,12 @@ internal static class PeakChartLabels
         return FormatMemoryPeakGb(points, totalMb);
     }
 
+    public static string FormatSpeedPeak(ObservableCollection<DateTimePoint> points)
+    {
+        var max = MaxHistoryValue(points);
+        return max.HasValue ? $"峰值: {max.Value:F1} MB/s" : Empty;
+    }
+
     private static double? MaxHistoryValue(ObservableCollection<DateTimePoint> points)
     {
         double? max = null;

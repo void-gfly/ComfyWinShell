@@ -12,7 +12,7 @@ namespace WpfDesktop.Views;
 /// </summary>
 public sealed class GpuChartHostControl : UserControl
 {
-    private readonly Border _chartRoot = new() { Height = 200 };
+    private readonly Border _chartRoot = new() { Height = 110 };
 
     public GpuChartHostControl()
     {
@@ -41,7 +41,7 @@ public sealed class GpuChartHostControl : UserControl
             BindingOperations.ClearBinding(existing, CartesianChart.YAxesProperty);
         }
 
-        var chart = new CartesianChart { Height = 200 };
+        var chart = new CartesianChart { Height = 110 };
         HardwareMonitorChartChrome.ApplyDarkChrome(chart);
 
         chart.SetBinding(CartesianChart.SeriesProperty, new Binding(nameof(GpuDisplayInfo.GpuChartSeries)) { Source = gpu });
