@@ -100,10 +100,12 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     public ObservableCollection<ISeries> CpuChartSeries { get; }
     public ObservableCollection<ISeries> MemoryChartSeries { get; }
     public ObservableCollection<ISeries> DiskChartSeries { get; }
+    public ObservableCollection<ISeries> NetworkChartSeries { get; }
 
     public ObservableCollection<ICartesianAxis> ChartXAxes { get; }
     public ObservableCollection<ICartesianAxis> ChartYAxes { get; }
     public ObservableCollection<ICartesianAxis> DiskChartYAxes { get; }
+    public ObservableCollection<ICartesianAxis> NetworkChartYAxes { get; }
 
     public HardwareMonitorViewModel(IHardwareMonitorService hardwareMonitorService, ILogService logService)
     {
@@ -113,6 +115,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         ChartXAxes = HardwareMonitorChartFactory.CreateTimeXAxes();
         ChartYAxes = HardwareMonitorChartFactory.CreatePercentYAxes();
         DiskChartYAxes = HardwareMonitorChartFactory.CreateSpeedYAxes();
+        NetworkChartYAxes = HardwareMonitorChartFactory.CreateSpeedYAxes("MB/s", 500);
 
         CpuChartSeries = new ObservableCollection<ISeries>
         {
@@ -126,6 +129,11 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         {
             HardwareMonitorChartFactory.CreateLineSeries("读取", DiskReadHistoryPoints, new SKColor(0x00, 0xBC, 0xD4), " MB/s"),
             HardwareMonitorChartFactory.CreateLineSeries("写入", DiskWriteHistoryPoints, new SKColor(0xFF, 0x57, 0x22), " MB/s")
+        };
+        NetworkChartSeries = new ObservableCollection<ISeries>
+        {
+            HardwareMonitorChartFactory.CreateLineSeries("下载", NetworkDownloadHistoryPoints, new SKColor(0x8B, 0xC3, 0x4A), " MB/s"),
+            HardwareMonitorChartFactory.CreateLineSeries("上传", NetworkUploadHistoryPoints, new SKColor(0x9C, 0x27, 0xB0), " MB/s")
         };
 
         RefreshCommand = new RelayCommand(Refresh);
@@ -170,6 +178,12 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     private double? _diskWriteRate;
 
     [ObservableProperty]
+    private double? _networkDownloadRate;
+
+    [ObservableProperty]
+    private double? _networkUploadRate;
+
+    [ObservableProperty]
     private string _lastUpdateTime = "";
 
     [ObservableProperty]
@@ -189,6 +203,15 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _diskWriteChartPeakText = PeakChartLabels.Empty;
 
+    [ObservableProperty]
+    private string _networkUploadChartPeakText = PeakChartLabels.Empty;
+
+    [ObservableProperty]
+    private string _networkDownloadChartPeakText = PeakChartLabels.Empty;
+
+    public ObservableCollection<DateTimePoint> NetworkUploadHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> NetworkDownloadHistoryPoints { get; } = new();
+
     public IRelayCommand RefreshCommand { get; }
 
     public string CpuLoadText => CpuLoad.HasValue ? $"{CpuLoad:F1}%" : "N/A";
@@ -205,6 +228,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
     public string DiskReadText => DiskReadRate.HasValue ? $"{DiskReadRate:F1} MB/s" : "N/A";
     public string DiskWriteText => DiskWriteRate.HasValue ? $"{DiskWriteRate:F1} MB/s" : "N/A";
+
+    public string NetworkDownloadText => NetworkDownloadRate.HasValue ? $"{NetworkDownloadRate:F1} MB/s" : "N/A";
+    public string NetworkUploadText => NetworkUploadRate.HasValue ? $"{NetworkUploadRate:F1} MB/s" : "N/A";
 
     partial void OnIsMonitoringChanged(bool value)
     {
@@ -237,6 +263,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
             DiskReadRate = snapshot.DiskReadRateMb;
             DiskWriteRate = snapshot.DiskWriteRateMb;
+            NetworkDownloadRate = snapshot.NetworkDownloadRateMb;
+            NetworkUploadRate = snapshot.NetworkUploadRateMb;
 
             LastUpdateTime = DateTime.Now.ToString("HH:mm:ss");
 
@@ -247,6 +275,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(MemoryPercent));
             OnPropertyChanged(nameof(DiskReadText));
             OnPropertyChanged(nameof(DiskWriteText));
+            OnPropertyChanged(nameof(NetworkDownloadText));
+            OnPropertyChanged(nameof(NetworkUploadText));
 
             AppendHistoryAndTrim(snapshot);
         }
@@ -270,6 +300,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         AppendPoint(DiskReadHistoryPoints, snapshot.DiskReadRateMb, now);
         AppendPoint(DiskWriteHistoryPoints, snapshot.DiskWriteRateMb, now);
 
+        AppendPoint(NetworkDownloadHistoryPoints, snapshot.NetworkDownloadRateMb, now);
+        AppendPoint(NetworkUploadHistoryPoints, snapshot.NetworkUploadRateMb, now);
+
         for (var i = 0; i < Gpus.Count && i < snapshot.Gpus.Count; i++)
         {
             var g = snapshot.Gpus[i];
@@ -286,6 +319,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         TrimWindow(MemoryHistoryPoints, now);
         TrimWindow(DiskReadHistoryPoints, now);
         TrimWindow(DiskWriteHistoryPoints, now);
+        TrimWindow(NetworkDownloadHistoryPoints, now);
+        TrimWindow(NetworkUploadHistoryPoints, now);
         foreach (var gpu in Gpus)
         {
             TrimWindow(gpu.LoadHistoryPoints, now);
@@ -302,6 +337,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         MemoryChartPeakText = PeakChartLabels.FormatMemoryPeakGb(MemoryHistoryPoints, MemoryTotal);
         DiskReadChartPeakText = PeakChartLabels.FormatSpeedPeak(DiskReadHistoryPoints);
         DiskWriteChartPeakText = PeakChartLabels.FormatSpeedPeak(DiskWriteHistoryPoints);
+        NetworkDownloadChartPeakText = PeakChartLabels.FormatSpeedPeak(NetworkDownloadHistoryPoints);
+        NetworkUploadChartPeakText = PeakChartLabels.FormatSpeedPeak(NetworkUploadHistoryPoints);
         foreach (var gpu in Gpus)
         {
             gpu.UpdateChartPeakLabels();

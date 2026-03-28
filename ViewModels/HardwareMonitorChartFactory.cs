@@ -71,14 +71,14 @@ internal static class HardwareMonitorChartFactory
         };
     }
 
-    public static ObservableCollection<ICartesianAxis> CreateSpeedYAxes(string name = "MB/s")
+    public static ObservableCollection<ICartesianAxis> CreateSpeedYAxes(string name = "MB/s", double maxLimit = 5000)
     {
         return new ObservableCollection<ICartesianAxis>
         {
             new Axis
             {
                 MinLimit = 0,
-                MaxLimit = 5000,
+                MaxLimit = maxLimit,
                 Name = name,
                 NamePaint = new SolidColorPaint(AxisLabelColor),
                 LabelsPaint = new SolidColorPaint(AxisLabelColor),

@@ -63,5 +63,12 @@ public partial class HardwareMonitorView : UserControl
         diskChart.SetBinding(CartesianChart.XAxesProperty, new Binding(nameof(HardwareMonitorViewModel.ChartXAxes)) { Source = vm });
         diskChart.SetBinding(CartesianChart.YAxesProperty, new Binding(nameof(HardwareMonitorViewModel.DiskChartYAxes)) { Source = vm });
         DiskChartHost.Child = diskChart;
+
+        var networkChart = new CartesianChart { Height = 110 };
+        HardwareMonitorChartChrome.ApplyDarkChrome(networkChart);
+        networkChart.SetBinding(CartesianChart.SeriesProperty, new Binding(nameof(HardwareMonitorViewModel.NetworkChartSeries)) { Source = vm });
+        networkChart.SetBinding(CartesianChart.XAxesProperty, new Binding(nameof(HardwareMonitorViewModel.ChartXAxes)) { Source = vm });
+        networkChart.SetBinding(CartesianChart.YAxesProperty, new Binding(nameof(HardwareMonitorViewModel.NetworkChartYAxes)) { Source = vm });
+        NetworkChartHost.Child = networkChart;
     }
 }

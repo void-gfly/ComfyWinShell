@@ -38,6 +38,10 @@ namespace WpfDesktop.Services
         private System.Diagnostics.PerformanceCounter? _diskWriteCounter;
         private bool _perfCountersInitialized;
 
+        private long _lastNetReceivedBytes = -1;
+        private long _lastNetSentBytes = -1;
+        private DateTime _lastNetTime = DateTime.MinValue;
+
         public HwInfo(ILogService? logService = null)
         {
             _logService = logService;
@@ -48,7 +52,8 @@ namespace WpfDesktop.Services
                 IsMemoryEnabled = true,
                 IsMotherboardEnabled = true,
                 IsControllerEnabled = true,
-                IsStorageEnabled = true
+                IsStorageEnabled = true,
+                IsNetworkEnabled = false
             };
             try
             {
@@ -97,6 +102,7 @@ namespace WpfDesktop.Services
             var (memUsed, memTotal) = SelectMemoryUsage(memorySensors, preferPhysicalMemory: true);
 
             var (diskReadMb, diskWriteMb) = SelectDiskRates(storageSensors);
+            var (netDownloadMb, netUploadMb) = GetNetworkRates();
 
             // 收集每个 GPU 的信息
             var gpus = new List<GpuInfoSnapshot>();
@@ -130,7 +136,9 @@ namespace WpfDesktop.Services
                 MemoryUsedMb = memUsed,
                 MemoryTotalMb = memTotal,
                 DiskReadRateMb = diskReadMb,
-                DiskWriteRateMb = diskWriteMb
+                DiskWriteRateMb = diskWriteMb,
+                NetworkDownloadRateMb = netDownloadMb,
+                NetworkUploadRateMb = netUploadMb
             };
         }
 
@@ -313,6 +321,55 @@ namespace WpfDesktop.Services
             }
 
             return (null, null);
+        }
+
+        private (double? downloadMb, double? uploadMb) GetNetworkRates()
+        {
+            try
+            {
+                long receivedBytes = 0;
+                long sentBytes = 0;
+                var interfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+                foreach (var ni in interfaces)
+                {
+                    if (ni.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up && 
+                        ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                    {
+                        var stats = ni.GetIPStatistics();
+                        receivedBytes += stats.BytesReceived;
+                        sentBytes += stats.BytesSent;
+                    }
+                }
+
+                var now = DateTime.UtcNow;
+
+                if (_lastNetReceivedBytes == -1 || _lastNetSentBytes == -1)
+                {
+                    _lastNetReceivedBytes = receivedBytes;
+                    _lastNetSentBytes = sentBytes;
+                    _lastNetTime = now;
+                    return (0.0, 0.0);
+                }
+
+                var elapsedSeconds = (now - _lastNetTime).TotalSeconds;
+                if (elapsedSeconds <= 0) return (0.0, 0.0);
+
+                var downloadRate = (receivedBytes - _lastNetReceivedBytes) / elapsedSeconds / (1024.0 * 1024.0);
+                var uploadRate = (sentBytes - _lastNetSentBytes) / elapsedSeconds / (1024.0 * 1024.0);
+
+                if (downloadRate < 0) downloadRate = 0;
+                if (uploadRate < 0) uploadRate = 0;
+
+                _lastNetReceivedBytes = receivedBytes;
+                _lastNetSentBytes = sentBytes;
+                _lastNetTime = now;
+
+                return (downloadRate, uploadRate);
+            }
+            catch
+            {
+                return (null, null);
+            }
         }
 
         private (double? used, double? total) SelectMemoryUsage(IEnumerable<ISensor> sensors, bool preferPhysicalMemory = false)
@@ -505,6 +562,8 @@ namespace WpfDesktop.Services
         public double? MemoryTotalMb { get; set; }
         public double? DiskReadRateMb { get; set; }
         public double? DiskWriteRateMb { get; set; }
+        public double? NetworkUploadRateMb { get; set; }
+        public double? NetworkDownloadRateMb { get; set; }
 
         /// <summary>
         /// 所有 GPU 的信息列表
