@@ -1,5 +1,8 @@
 namespace WpfDesktop.Models.Enums;
 
+/// <summary>
+/// 表示 UNet 使用的精度模式。
+/// </summary>
 public enum UnetPrecisionMode
 {
     Default,

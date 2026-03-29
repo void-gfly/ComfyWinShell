@@ -27,6 +27,9 @@ public class CudaDeviceOption
     /// <summary>
     /// 创建设备选项
     /// </summary>
+    /// <param name="deviceId">CUDA 设备编号。</param>
+    /// <param name="gpuName">GPU 显示名称。</param>
+    /// <returns>包含设备编号与显示名称的设备选项。</returns>
     public static CudaDeviceOption Create(int deviceId, string gpuName)
     {
         return new CudaDeviceOption
@@ -36,5 +39,9 @@ public class CudaDeviceOption
         };
     }
 
+    /// <summary>
+    /// 返回用于界面展示的设备名称。
+    /// </summary>
+    /// <returns>当前选项的显示名称。</returns>
     public override string ToString() => DisplayName;
 }

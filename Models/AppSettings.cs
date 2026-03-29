@@ -1,39 +1,57 @@
 namespace WpfDesktop.Models;
 
+/// <summary>
+/// 表示应用程序的全局设置。
+/// </summary>
 public class AppSettings
 {
+    /// <summary>
+    /// 应用界面的当前语言代码，例如 zh-CN 或 en-US。
+    /// </summary>
     public string Language { get; set; } = "zh-CN";
+
+    /// <summary>
+    /// 应用界面使用的主题名称。
+    /// </summary>
     public string Theme { get; set; } = "Dark";
+
+    /// <summary>
+    /// Python 运行时或安装根目录路径。
+    /// </summary>
     public string PythonRoot { get; set; } = "";
+
+    /// <summary>
+    /// 控制台中最多保留的日志行数，超过后会按策略裁剪。
+    /// </summary>
     public int MaxLogLines { get; set; } = 5000;
     
     /// <summary>
-    /// 控制台日志行高（紧凑=12，默认=15，宽松=18）
+    /// 控制台日志显示时的行高，影响日志列表的紧凑程度。
     /// </summary>
     public int LogLineHeight { get; set; } = 15;
 
     /// <summary>
-    /// 数据存储根目录
+    /// 应用数据默认存储的根目录。
     /// </summary>
     public string DataRoot { get; set; } = "data";
 
     /// <summary>
-    /// 应用程序名称
+    /// 应用程序显示名称，可用于标题栏或配置目录命名。
     /// </summary>
     public string AppName { get; set; } = "ComfyShell";
 
     /// <summary>
-    /// 代理配置
+    /// 网络代理相关设置，用于下载依赖或访问外部资源。
     /// </summary>
     public ProxySettings Proxy { get; set; } = new();
 
     /// <summary>
-    /// GitHub 镜像配置
+    /// GitHub 镜像站点设置，用于加速 GitHub 资源访问。
     /// </summary>
     public GitHubMirrorSettings GitHubMirror { get; set; } = new();
 
     /// <summary>
-    /// pip 镜像配置
+    /// pip 镜像源设置，用于加速 Python 包安装。
     /// </summary>
     public PipMirrorSettings PipMirror { get; set; } = new();
 }
