@@ -19,12 +19,23 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
 
     public event EventHandler<EnvironmentCheckEventArgs>? CheckProgressUpdated;
 
+    /// <summary>
+    /// 初始化环境检测服务。
+    /// </summary>
+    /// <param name="logService">日志服务。</param>
+    /// <param name="hardwareMonitorService">硬件监控服务。</param>
     public EnvironmentCheckService(ILogService logService, IHardwareMonitorService hardwareMonitorService)
     {
         _logService = logService;
         _hardwareMonitorService = hardwareMonitorService;
     }
 
+    /// <summary>
+    /// 依次执行 ComfyUI 运行环境的完整检测。
+    /// </summary>
+    /// <param name="pythonPath">Python 解释器路径；为空时自动解析。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>完整的环境检测结果。</returns>
     public async Task<EnvironmentCheckResult> CheckAllAsync(string? pythonPath = null, CancellationToken cancellationToken = default)
     {
         var result = new EnvironmentCheckResult();
@@ -74,6 +85,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 Python 版本（必需：>= 3.10）
     /// </summary>
+    /// <param name="pythonPath">Python 解释器路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Python 版本检测结果。</returns>
     private async Task<CheckItemResult> CheckPythonVersionAsync(string? pythonPath, CancellationToken cancellationToken)
     {
         var result = new CheckItemResult { Name = "Python 版本" };
@@ -138,6 +152,8 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 Git 可用性（必需）
     /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Git 检测结果。</returns>
     private async Task<CheckItemResult> CheckGitAsync(CancellationToken cancellationToken)
     {
         var result = new CheckItemResult { Name = "Git" };
@@ -175,6 +191,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 PyTorch 可用性（必需）
     /// </summary>
+    /// <param name="pythonPath">Python 解释器路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>PyTorch 检测结果。</returns>
     private async Task<CheckItemResult> CheckPyTorchAsync(string? pythonPath, CancellationToken cancellationToken)
     {
         var result = new CheckItemResult { Name = "PyTorch" };
@@ -214,6 +233,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 CUDA 支持（可选）
     /// </summary>
+    /// <param name="pythonPath">Python 解释器路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>CUDA 检测结果。</returns>
     private async Task<CheckItemResult> CheckCudaAsync(string? pythonPath, CancellationToken cancellationToken)
     {
         var result = new CheckItemResult { Name = "CUDA 支持" };
@@ -274,6 +296,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 PyTorch CUDA 可用性（辅助方法）
     /// </summary>
+    /// <param name="result">待补充的检测结果对象。</param>
+    /// <param name="pythonPath">Python 解释器路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     private async Task CheckPyTorchCudaAsync(CheckItemResult result, string? pythonPath, CancellationToken cancellationToken)
     {
         try
@@ -305,6 +330,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 AMD ROCm 支持（可选）
     /// </summary>
+    /// <param name="pythonPath">Python 解释器路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>ROCm 检测结果。</returns>
     private async Task<CheckItemResult> CheckAmdAsync(string? pythonPath, CancellationToken cancellationToken)
     {
         var result = new CheckItemResult { Name = "AMD ROCm 支持" };
@@ -363,6 +391,8 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 检测 FFmpeg 可用性（可选）
     /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>FFmpeg 检测结果。</returns>
     private async Task<CheckItemResult> CheckFFmpegAsync(CancellationToken cancellationToken)
     {
         var result = new CheckItemResult { Name = "FFmpeg" };
@@ -402,6 +432,8 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 获取 Python 可执行文件路径
     /// </summary>
+    /// <param name="pythonPath">用户提供的 Python 路径或目录。</param>
+    /// <returns>可执行的 Python 命令或完整路径。</returns>
     private static string GetPythonExecutable(string? pythonPath)
     {
         if (!string.IsNullOrWhiteSpace(pythonPath))
@@ -428,6 +460,11 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 运行命令行工具
     /// </summary>
+    /// <param name="command">命令名称或路径。</param>
+    /// <param name="arguments">命令参数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="timeoutSeconds">执行超时时间，单位为秒。</param>
+    /// <returns>退出码与命令输出内容。</returns>
     private async Task<(int exitCode, string output)> RunCommandAsync(
         string command, 
         string arguments, 
@@ -504,6 +541,9 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 输出启动信息横幅到日志，并行获取 Python/PyTorch/GPU/ComfyUI 版本
     /// </summary>
+    /// <param name="pythonPath">Python 解释器路径。</param>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     public async Task LogStartupBannerAsync(string? pythonPath, string? comfyRootPath, CancellationToken cancellationToken = default)
     {
         var pythonExe = ResolveStartupPythonExecutable(pythonPath, comfyRootPath);
@@ -553,6 +593,10 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         _logService.Log(separator);
     }
 
+    /// <summary>
+    /// 从硬件监控模块提取 CPU、内存与 GPU 摘要信息。
+    /// </summary>
+    /// <returns>CPU 信息、内存占用、GPU 信息和显存占用组成的元组。</returns>
     private (string cpuInfo, string cpuMemoryInfo, string gpuInfo, string gpuMemoryInfo) GetHardwareInfoFromHwModule()
     {
         var snapshot = _hardwareMonitorService.GetSnapshot();
@@ -585,6 +629,12 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return (cpuInfo, cpuMemoryInfo, string.Join(" | ", gpuNames), gpuMemoryInfo);
     }
 
+    /// <summary>
+    /// 将已用/总量的内存值格式化为易读文本。
+    /// </summary>
+    /// <param name="usedMb">已使用大小，单位 MB。</param>
+    /// <param name="totalMb">总大小，单位 MB。</param>
+    /// <returns>格式化后的容量文本；未知时返回“未知”。</returns>
     private static string FormatUsage(double? usedMb, double? totalMb)
     {
         if (!usedMb.HasValue || !totalMb.HasValue || totalMb.Value <= 0)
@@ -597,6 +647,12 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return $"{usedGb:F1} GB / {totalGb:F1} GB";
     }
 
+    /// <summary>
+    /// 解析启动横幅所需的 Python 可执行文件路径。
+    /// </summary>
+    /// <param name="pythonPath">用户提供的 Python 路径。</param>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
+    /// <returns>可执行的 Python 命令或路径。</returns>
     private static string ResolveStartupPythonExecutable(string? pythonPath, string? comfyRootPath)
     {
         if (!string.IsNullOrWhiteSpace(pythonPath))
@@ -625,6 +681,11 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return "python";
     }
 
+    /// <summary>
+    /// 解析包含 Git 元数据的 ComfyUI 目录。
+    /// </summary>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
+    /// <returns>包含 .git 的目录路径；未找到时返回 null。</returns>
     private static string? ResolveComfyGitDirectory(string? comfyRootPath)
     {
         if (string.IsNullOrWhiteSpace(comfyRootPath))
@@ -650,6 +711,12 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return null;
     }
 
+    /// <summary>
+    /// 获取 ComfyUI 的版本标识，优先读取标签，失败时回退到短哈希。
+    /// </summary>
+    /// <param name="comfyGitPath">Git 仓库目录路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>退出码与版本文本。</returns>
     private async Task<(int exitCode, string output)> GetComfyVersionAsync(string? comfyGitPath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(comfyGitPath))
@@ -667,6 +734,12 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return await RunCommandAsync("git", $"-C \"{comfyGitPath}\" rev-parse --short HEAD", cancellationToken, timeoutSeconds: 10);
     }
 
+    /// <summary>
+    /// 通过 PyTorch 探测 GPU 名称。
+    /// </summary>
+    /// <param name="pythonExe">Python 可执行文件路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>检测到的 GPU 名称；未检测到时返回默认提示。</returns>
     private async Task<string> DetectGpuViaPyTorchAsync(string pythonExe, CancellationToken cancellationToken)
     {
         var script = "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() and torch.cuda.device_count() > 0 else '未检测到 NVIDIA GPU')";
@@ -679,6 +752,11 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return "未检测到 NVIDIA GPU";
     }
 
+    /// <summary>
+    /// 从命令输出中提取 Python 版本文本。
+    /// </summary>
+    /// <param name="output">命令输出内容。</param>
+    /// <returns>提取后的 Python 版本描述。</returns>
     private static string ExtractPythonVersion(string output)
     {
         var match = System.Text.RegularExpressions.Regex.Match(output, @"Python\s+\d+\.\d+\.\d+");
@@ -690,6 +768,11 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return FirstNonEmptyLine(output);
     }
 
+    /// <summary>
+    /// 从命令输出中提取 PyTorch 版本号。
+    /// </summary>
+    /// <param name="output">命令输出内容。</param>
+    /// <returns>提取到的 PyTorch 版本文本。</returns>
     private static string ExtractPyTorchVersion(string output)
     {
         // 兼容 stderr 警告噪声，优先提取真实的 torch 版本号
@@ -703,6 +786,11 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         return string.IsNullOrWhiteSpace(firstLine) ? "未安装" : firstLine;
     }
 
+    /// <summary>
+    /// 返回文本中的第一条非空行。
+    /// </summary>
+    /// <param name="text">原始文本。</param>
+    /// <returns>第一条非空行；若不存在则返回整体去空白后的文本。</returns>
     private static string FirstNonEmptyLine(string text)
     {
         foreach (var line in text.Split('\n'))
@@ -720,6 +808,7 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 报告检测进度
     /// </summary>
+    /// <param name="result">当前检测项结果。</param>
     private void ReportProgress(CheckItemResult result)
     {
         CheckProgressUpdated?.Invoke(this, new EnvironmentCheckEventArgs

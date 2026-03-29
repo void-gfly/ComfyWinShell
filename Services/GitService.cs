@@ -7,16 +7,30 @@ using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// Git 仓库操作服务实现。
+/// </summary>
 public class GitService : IGitService
 {
     private readonly IProxyService _proxyService;
     private readonly ILogService _logService;
 
+    /// <summary>
+    /// 初始化 Git 服务。
+    /// </summary>
+    /// <param name="proxyService">代理服务。</param>
+    /// <param name="logService">日志服务。</param>
     public GitService(IProxyService proxyService, ILogService logService)
     {
         _proxyService = proxyService;
         _logService = logService;
     }
+
+    /// <summary>
+    /// 判断指定路径是否为 Git 仓库。
+    /// </summary>
+    /// <param name="path">待检查目录。</param>
+    /// <returns>是 Git 仓库时返回 true，否则返回 false。</returns>
     public async Task<bool> IsGitRepositoryAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
@@ -34,6 +48,11 @@ public class GitService : IGitService
         }
     }
 
+    /// <summary>
+    /// 获取仓库 origin 远程地址。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
+    /// <returns>远程地址字符串。</returns>
     public async Task<string> GetRemoteUrlAsync(string path)
     {
         try
@@ -47,6 +66,11 @@ public class GitService : IGitService
         }
     }
 
+    /// <summary>
+    /// 获取仓库当前分支名称。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
+    /// <returns>分支名称；分离头指针时返回 Detached HEAD。</returns>
     public async Task<string> GetCurrentBranchAsync(string path)
     {
         try
@@ -66,6 +90,11 @@ public class GitService : IGitService
         }
     }
 
+    /// <summary>
+    /// 获取当前提交哈希。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
+    /// <returns>完整提交哈希。</returns>
     public async Task<string> GetCurrentCommitHashAsync(string path)
     {
         try
@@ -79,6 +108,12 @@ public class GitService : IGitService
         }
     }
 
+    /// <summary>
+    /// 获取最近的提交记录。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
+    /// <param name="count">返回的最大提交数量。</param>
+    /// <returns>提交记录列表。</returns>
     public async Task<IReadOnlyList<GitCommit>> GetCommitsAsync(string path, int count = 100)
     {
         var commits = new List<GitCommit>();
@@ -117,6 +152,11 @@ public class GitService : IGitService
         return commits;
     }
 
+    /// <summary>
+    /// 获取仓库标签对应的提交列表。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
+    /// <returns>带标签信息的提交列表。</returns>
     public async Task<IReadOnlyList<GitCommit>> GetTagsAsync(string path)
     {
         var tags = new List<GitCommit>();
@@ -160,16 +200,30 @@ public class GitService : IGitService
         return tags;
     }
 
+    /// <summary>
+    /// 切换仓库到指定引用。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
+    /// <param name="refName">目标引用名称。</param>
     public async Task CheckoutAsync(string path, string refName)
     {
         await RunGitCommandAsync(path, $"checkout {refName}");
     }
 
+    /// <summary>
+    /// 抓取远程仓库最新引用与标签。
+    /// </summary>
+    /// <param name="path">仓库目录。</param>
     public async Task FetchAsync(string path)
     {
         await RunGitCommandAsync(path, "fetch --all --tags");
     }
 
+    /// <summary>
+    /// 从 Git refs 字符串中提取标签名称。
+    /// </summary>
+    /// <param name="refString">原始 refs 文本。</param>
+    /// <returns>提取到的标签名；不存在时返回 null。</returns>
     private string? ParseTag(string refString)
     {
         // Example refs: "HEAD -> master, tag: v1.0, origin/master"
@@ -185,6 +239,12 @@ public class GitService : IGitService
         return null;
     }
 
+    /// <summary>
+    /// 在指定工作目录执行 Git 命令并返回标准输出。
+    /// </summary>
+    /// <param name="workingDir">Git 工作目录。</param>
+    /// <param name="arguments">Git 命令参数。</param>
+    /// <returns>命令标准输出内容。</returns>
     private async Task<string> RunGitCommandAsync(string workingDir, string arguments)
     {
         var startInfo = new ProcessStartInfo

@@ -13,6 +13,11 @@ public class ProxyService : IProxyService
     private readonly IOptionsMonitor<AppSettings> _settingsMonitor;
     private readonly ILogService _logService;
 
+    /// <summary>
+    /// 初始化代理与镜像服务。
+    /// </summary>
+    /// <param name="settingsMonitor">应用设置监视器。</param>
+    /// <param name="logService">日志服务。</param>
     public ProxyService(IOptionsMonitor<AppSettings> settingsMonitor, ILogService logService)
     {
         _settingsMonitor = settingsMonitor;
@@ -25,6 +30,10 @@ public class ProxyService : IProxyService
 
     public bool IsPipMirrorEnabled => _settingsMonitor.CurrentValue.PipMirror.Enabled;
 
+    /// <summary>
+    /// 获取当前配置的代理服务器地址。
+    /// </summary>
+    /// <returns>代理服务器地址；未启用时返回空字符串。</returns>
     public string GetProxyServer()
     {
         var proxy = _settingsMonitor.CurrentValue.Proxy;
@@ -36,6 +45,11 @@ public class ProxyService : IProxyService
         return proxy.Server;
     }
 
+    /// <summary>
+    /// 将 GitHub 地址转换为镜像地址。
+    /// </summary>
+    /// <param name="originalUrl">原始 GitHub 地址。</param>
+    /// <returns>转换后的镜像地址；不需要转换时返回原地址。</returns>
     public string ConvertGitHubUrl(string originalUrl)
     {
         var mirror = _settingsMonitor.CurrentValue.GitHubMirror;
@@ -83,6 +97,10 @@ public class ProxyService : IProxyService
         return $"{trimmedMirror}/{originalUrl}";
     }
 
+    /// <summary>
+    /// 生成 pip 镜像源参数。
+    /// </summary>
+    /// <returns>pip 命令行参数字符串；未启用时返回空字符串。</returns>
     public string GetPipMirrorArgs()
     {
         var pip = _settingsMonitor.CurrentValue.PipMirror;
@@ -110,6 +128,10 @@ public class ProxyService : IProxyService
         return args;
     }
 
+    /// <summary>
+    /// 为进程启动信息配置代理与镜像相关环境变量。
+    /// </summary>
+    /// <param name="startInfo">待配置的进程启动信息。</param>
     public void ConfigureProcessProxy(ProcessStartInfo startInfo)
     {
         var proxy = _settingsMonitor.CurrentValue.Proxy;

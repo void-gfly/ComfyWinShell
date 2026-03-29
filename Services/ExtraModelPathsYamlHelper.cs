@@ -2,8 +2,16 @@ using System.IO;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// 扩展模型路径 YAML 内容生成辅助类。
+/// </summary>
 public static class ExtraModelPathsYamlHelper
 {
+    /// <summary>
+    /// 根据基础目录生成 extra_model_paths.yaml 文件内容。
+    /// </summary>
+    /// <param name="basePath">模型基础目录。</param>
+    /// <returns>符合 ComfyUI 格式的 YAML 文本。</returns>
     public static string GenerateYamlContent(string basePath)
     {
         var normalizedPath = basePath.Replace('\\', '/');

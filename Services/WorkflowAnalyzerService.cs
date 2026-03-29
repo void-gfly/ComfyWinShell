@@ -182,6 +182,13 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         "MarkdownNote",
     };
 
+    /// <summary>
+    /// 初始化工作流分析服务。
+    /// </summary>
+    /// <param name="comfyPathService">ComfyUI 路径服务。</param>
+    /// <param name="pythonPathService">Python 路径服务。</param>
+    /// <param name="resourceService">资源服务。</param>
+    /// <param name="logService">日志服务。</param>
     public WorkflowAnalyzerService(
         IComfyPathService comfyPathService, 
         IPythonPathService pythonPathService,
@@ -194,12 +201,21 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         _logService = logService;
     }
 
+    /// <summary>
+    /// 判断文件是否为支持分析的工作流文件。
+    /// </summary>
+    /// <param name="filePath">待判断文件路径。</param>
+    /// <returns>是工作流文件时返回 true，否则返回 false。</returns>
     public bool IsWorkflowFile(string filePath)
     {
         if (string.IsNullOrEmpty(filePath)) return false;
         return filePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// 清空并重新扫描节点缓存。
+    /// </summary>
+    /// <returns>表示异步刷新的任务。</returns>
     public async Task RefreshNodeCacheAsync()
     {
         _logService.Log("开始刷新节点缓存...");
@@ -210,6 +226,11 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         _logService.Log($"节点缓存刷新完成，共扫描到 {_installedNodesCache?.Count ?? 0} 个节点");
     }
 
+    /// <summary>
+    /// 分析工作流文件中的节点与模型依赖。
+    /// </summary>
+    /// <param name="workflowPath">工作流文件路径。</param>
+    /// <returns>工作流分析结果。</returns>
     public async Task<WorkflowAnalysisResult> AnalyzeWorkflowAsync(string workflowPath)
     {
         var result = new WorkflowAnalysisResult
@@ -267,6 +288,8 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 检测是否为 API 格式（节点 ID 作为键）
     /// </summary>
+    /// <param name="root">工作流 JSON 根节点。</param>
+    /// <returns>是 API 格式时返回 true，否则返回 false。</returns>
     private static bool DetectApiFormat(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Object) return false;
@@ -295,6 +318,9 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 解析工作流节点
     /// </summary>
+    /// <param name="root">工作流 JSON 根节点。</param>
+    /// <param name="isApiFormat">是否为 API 格式。</param>
+    /// <returns>解析后的节点列表。</returns>
     private static List<WorkflowNode> ParseNodes(JsonElement root, bool isApiFormat)
     {
         var nodes = new List<WorkflowNode>();
@@ -373,6 +399,8 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 提取节点列表（简化版，跳过已安装检查）
     /// </summary>
+    /// <param name="nodes">工作流节点列表。</param>
+    /// <returns>提取出的节点依赖列表。</returns>
     private List<RequiredCustomNode> ExtractCustomNodesSimple(List<WorkflowNode> nodes)
     {
         var nodeTypeCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -405,6 +433,8 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 提取自定义节点（异步）
     /// </summary>
+    /// <param name="nodes">工作流节点列表。</param>
+    /// <returns>包含安装状态的节点依赖列表。</returns>
     private async Task<List<RequiredCustomNode>> ExtractCustomNodesAsync(List<WorkflowNode> nodes)
     {
         // 懒加载：首次使用时扫描已安装节点
@@ -465,6 +495,8 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 判断节点是否存在
     /// </summary>
+    /// <param name="nodeType">节点类型名称。</param>
+    /// <returns>存在时返回 true，否则返回 false。</returns>
     private bool DetermineNodeExists(string nodeType)
     {
         // 内置节点始终存在
@@ -488,6 +520,11 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
         return exists;
     }
 
+    /// <summary>
+    /// 将工作流中的节点类型规范化为真实 class_type。
+    /// </summary>
+    /// <param name="nodeType">原始节点类型名称。</param>
+    /// <returns>规范化后的节点类型名称。</returns>
     private string GetNormalizedNodeType(string nodeType)
     {
         if (string.IsNullOrWhiteSpace(nodeType)) return nodeType;
@@ -508,6 +545,8 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 获取节点所属包名
     /// </summary>
+    /// <param name="nodeType">节点类型名称。</param>
+    /// <returns>所属包名；未知时返回 null。</returns>
     private string? GetPackageName(string nodeType)
     {
         if (BuiltInNodes.Contains(nodeType)) return "ComfyUI (内置)";
@@ -520,6 +559,7 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 扫描已安装的自定义节点（异步）
     /// </summary>
+    /// <returns>表示扫描过程的任务。</returns>
     private async Task ScanInstalledNodesAsync()
     {
         _installedNodesCache = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -561,6 +601,7 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 使用 Python 脚本动态扫描节点（异步方法）
     /// </summary>
+    /// <returns>扫描成功时返回 true，否则返回 false。</returns>
     private async Task<bool> ScanNodesWithPythonScriptAsync()
     {
         try
@@ -787,6 +828,7 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 获取 ComfyUI 的 Python 解释器路径
     /// </summary>
+    /// <returns>找到时返回 Python 解释器路径，否则返回 null。</returns>
     private string? FindPythonExecutable()
     {
         // 使用已解析的 Python 路径（从 PythonPathService）
@@ -806,6 +848,9 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 提取模型引用
     /// </summary>
+    /// <param name="nodes">工作流节点列表。</param>
+    /// <param name="isApiFormat">是否为 API 格式。</param>
+    /// <returns>提取出的模型依赖列表。</returns>
     private async Task<List<RequiredModel>> ExtractModelsAsync(List<WorkflowNode> nodes, bool isApiFormat)
     {
         var models = new List<RequiredModel>();
@@ -885,6 +930,10 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     /// <summary>
     /// 从 WanVideoLoraSelectMulti 节点提取多个 LoRA 模型
     /// </summary>
+    /// <param name="node">当前工作流节点。</param>
+    /// <param name="models">模型结果集合。</param>
+    /// <param name="seenModels">已处理模型集合。</param>
+    /// <param name="isApiFormat">是否为 API 格式。</param>
     private async Task ExtractMultiLoraModels(WorkflowNode node, List<RequiredModel> models, 
         HashSet<string> seenModels, bool isApiFormat)
     {
@@ -923,9 +972,12 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 从 Lora Loader Stack (rgthree) 节点提取多个 LoRA 模型
-    /// widgets_values 格式: [lora_01, strength_01, lora_02, strength_02, ...]
+    /// 从 rgthree 的 Lora Loader Stack 节点提取多个 LoRA 模型。
     /// </summary>
+    /// <param name="node">当前工作流节点。</param>
+    /// <param name="models">模型结果集合。</param>
+    /// <param name="seenModels">已处理模型集合。</param>
+    /// <param name="isApiFormat">是否为 API 格式。</param>
     private async Task ExtractRgthreeLoraStackModels(WorkflowNode node, List<RequiredModel> models, 
         HashSet<string> seenModels, bool isApiFormat)
     {
@@ -962,8 +1014,12 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 通用模型扫描：遍历未被映射节点的参数，检测常见模型文件扩展名
+    /// 从未映射节点中做通用扫描，补充识别模型文件引用。
     /// </summary>
+    /// <param name="nodes">工作流节点列表。</param>
+    /// <param name="models">模型结果集合。</param>
+    /// <param name="seenModels">已处理模型集合。</param>
+    /// <param name="isApiFormat">是否为 API 格式。</param>
     private async Task ExtractModelsFromUnknownNodes(List<WorkflowNode> nodes, List<RequiredModel> models, 
         HashSet<string> seenModels, bool isApiFormat)
     {
@@ -1015,8 +1071,10 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 从 JSON 元素中递归提取可能的模型文件名
+    /// 递归遍历 JSON 元素并提取可能的模型文件名。
     /// </summary>
+    /// <param name="element">当前 JSON 元素。</param>
+    /// <param name="results">提取结果集合。</param>
     private void ExtractModelFilesFromJsonElement(JsonElement element, List<string> results)
     {
         switch (element.ValueKind)
@@ -1046,8 +1104,10 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 判断字符串是否为模型文件名
+    /// 判断字符串是否看起来像模型文件名。
     /// </summary>
+    /// <param name="value">待判断字符串。</param>
+    /// <returns>是模型文件名时返回 true，否则返回 false。</returns>
     private bool IsModelFile(string value)
     {
         // 排除明显不是模型的值
@@ -1064,8 +1124,10 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 根据文件扩展名推断模型类型
+    /// 根据文件扩展名推断模型类型。
     /// </summary>
+    /// <param name="modelName">模型文件名。</param>
+    /// <returns>推断得到的模型类型。</returns>
     private ModelType InferModelTypeFromExtension(string modelName)
     {
         var extension = Path.GetExtension(modelName).ToLowerInvariant();
@@ -1092,8 +1154,10 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 根据模型类型推断可能的目录
+    /// 根据模型类型推断默认模型目录。
     /// </summary>
+    /// <param name="type">模型类型。</param>
+    /// <returns>对应的模型目录名称。</returns>
     private string InferModelDirectoryFromType(ModelType type)
     {
         return type switch
@@ -1115,8 +1179,10 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 查找模型文件（支持多个可能的目录 + 扩展模型目录 + 全局递归搜索）
+    /// 在 ComfyUI 主目录和扩展目录中查找模型文件。
     /// </summary>
+    /// <param name="model">待填充查找结果的模型对象。</param>
+    /// <param name="modelDir">默认模型目录名。</param>
     private void FindModelFile(RequiredModel model, string modelDir)
     {
         if (!_comfyPathService.IsValid || string.IsNullOrEmpty(_comfyPathService.ComfyUiPath))
@@ -1273,8 +1339,9 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 获取扩展模型目录列表（带缓存）
+    /// 获取缓存的扩展模型目录列表。
     /// </summary>
+    /// <returns>扩展模型目录列表。</returns>
     private IReadOnlyList<ModelFolderInfo> GetExtraModelFolders()
     {
         if (_extraModelFoldersCache != null)
@@ -1294,8 +1361,11 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 递归搜索模型文件
+    /// 在目录中递归搜索指定模型文件。
     /// </summary>
+    /// <param name="directory">搜索起始目录。</param>
+    /// <param name="modelFileName">模型文件名。</param>
+    /// <returns>找到时返回完整路径，否则返回 null。</returns>
     private string? SearchModelRecursively(string directory, string modelFileName)
     {
         try
@@ -1326,8 +1396,11 @@ public partial class WorkflowAnalyzerService : IWorkflowAnalyzerService
     }
 
     /// <summary>
-    /// 设置模型找到时的信息
+    /// 将模型对象标记为已找到，并写入完整路径与逻辑相对目录。
     /// </summary>
+    /// <param name="model">待更新的模型对象。</param>
+    /// <param name="fullPath">模型完整路径。</param>
+    /// <param name="relativeDir">逻辑相对目录。</param>
     private void SetModelFound(RequiredModel model, string fullPath, string relativeDir)
     {
         model.Exists = true;

@@ -1,5 +1,8 @@
 namespace WpfDesktop.Services.Interfaces;
 
+/// <summary>
+/// 硬件监控服务接口。
+/// </summary>
 public interface IHardwareMonitorService : IDisposable
 {
     /// <summary>

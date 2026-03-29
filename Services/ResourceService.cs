@@ -17,12 +17,21 @@ public class ResourceService : IResourceService
     // 缓存模型描述
     private IReadOnlyDictionary<string, string>? _modelDescriptionsCache;
 
+    /// <summary>
+    /// 初始化资源服务。
+    /// </summary>
+    /// <param name="comfyPathService">ComfyUI 路径服务。</param>
+    /// <param name="logService">日志服务。</param>
     public ResourceService(IComfyPathService comfyPathService, ILogService logService)
     {
         _comfyPathService = comfyPathService;
         _logService = logService;
     }
 
+    /// <summary>
+    /// 获取所有自定义节点目录信息。
+    /// </summary>
+    /// <returns>自定义节点列表。</returns>
     public async Task<IReadOnlyList<CustomNodeInfo>> GetCustomNodesAsync()
     {
         return await Task.Run(() =>
@@ -64,6 +73,10 @@ public class ResourceService : IResourceService
         });
     }
 
+    /// <summary>
+    /// 获取 ComfyUI models 目录下的模型文件夹。
+    /// </summary>
+    /// <returns>模型文件夹列表。</returns>
     public async Task<IReadOnlyList<ModelFolderInfo>> GetModelFoldersAsync()
     {
         return await Task.Run(() =>
@@ -98,6 +111,10 @@ public class ResourceService : IResourceService
         });
     }
 
+    /// <summary>
+    /// 读取 extra_model_paths.yaml 中声明的扩展模型目录。
+    /// </summary>
+    /// <returns>扩展模型文件夹列表。</returns>
     public async Task<IReadOnlyList<ModelFolderInfo>> GetExtraModelFoldersAsync()
     {
         return await Task.Run(() =>
@@ -134,6 +151,10 @@ public class ResourceService : IResourceService
         });
     }
 
+    /// <summary>
+    /// 获取工作流目录下的工作流文件列表。
+    /// </summary>
+    /// <returns>工作流文件信息列表。</returns>
     public async Task<IReadOnlyList<WorkflowInfo>> GetWorkflowsAsync()
     {
         return await Task.Run(() =>
@@ -173,6 +194,11 @@ public class ResourceService : IResourceService
         ".txt", ".png", ".jpg", ".jpeg", ".log", ".md"
     };
 
+    /// <summary>
+    /// 统计指定目录的总大小与模型文件数量。
+    /// </summary>
+    /// <param name="folderPath">待统计目录。</param>
+    /// <returns>目录大小与文件数量元组。</returns>
     public async Task<(long SizeBytes, int FileCount)> CalculateFolderSizeAsync(string folderPath)
     {
         return await Task.Run(() =>
@@ -225,6 +251,11 @@ public class ResourceService : IResourceService
         });
     }
 
+    /// <summary>
+    /// 尝试从 Git 配置文件中读取 origin 远程地址。
+    /// </summary>
+    /// <param name="repoPath">仓库目录路径。</param>
+    /// <returns>远程地址；读取失败时返回 null。</returns>
     private string? TryGetGitRemoteUrl(string repoPath)
     {
         try
@@ -264,6 +295,11 @@ public class ResourceService : IResourceService
         return null;
     }
 
+    /// <summary>
+    /// 解析 extra_model_paths.yaml 中的目录映射。
+    /// </summary>
+    /// <param name="yamlPath">YAML 文件路径。</param>
+    /// <returns>名称与绝对路径的映射列表。</returns>
     private IReadOnlyList<(string Name, string Path)> ParseExtraModelPathsYaml(string yamlPath)
     {
         var result = new List<(string Name, string Path)>();
@@ -329,6 +365,11 @@ public class ResourceService : IResourceService
         return result;
     }
 
+    /// <summary>
+    /// 规范化 YAML 中读取到的路径值。
+    /// </summary>
+    /// <param name="value">原始 YAML 值。</param>
+    /// <returns>去掉注释、引号并规范分隔符后的路径值。</returns>
     private static string NormalizeYamlValue(string value)
     {
         var normalized = value.Trim();
@@ -348,6 +389,10 @@ public class ResourceService : IResourceService
         return normalized.Replace('/', Path.DirectorySeparatorChar).Trim();
     }
 
+    /// <summary>
+    /// 获取模型目录说明文本映射，并缓存结果。
+    /// </summary>
+    /// <returns>目录名到说明文本的字典。</returns>
     public async Task<IReadOnlyDictionary<string, string>> GetModelDescriptionsAsync()
     {
         // 如果已缓存，直接返回

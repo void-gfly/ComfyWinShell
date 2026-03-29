@@ -5,8 +5,16 @@ using WpfDesktop.Models.Enums;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// ComfyUI 启动参数构建器。
+/// </summary>
 public class ArgumentBuilder
 {
+    /// <summary>
+    /// 根据配置对象构建完整的命令行参数字符串。
+    /// </summary>
+    /// <param name="configuration">ComfyUI 启动配置。</param>
+    /// <returns>拼接后的命令行参数字符串。</returns>
     public string BuildArguments(ComfyConfiguration configuration)
     {
         var args = new List<string>();
@@ -26,6 +34,11 @@ public class ArgumentBuilder
         return string.Join(" ", args);
     }
 
+    /// <summary>
+    /// 添加网络相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="network">网络配置。</param>
     private static void AddNetworkArguments(List<string> args, NetworkConfiguration network)
     {
         if (!string.IsNullOrWhiteSpace(network.Listen) && network.Listen != "127.0.0.1")
@@ -66,6 +79,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加路径相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="paths">路径配置。</param>
     private static void AddPathArguments(List<string> args, PathConfiguration paths)
     {
         if (!string.IsNullOrWhiteSpace(paths.BaseDirectory))
@@ -105,6 +123,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加计算设备相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="device">设备配置。</param>
     private static void AddDeviceArguments(List<string> args, DeviceConfiguration device)
     {
         if (device.CudaDevice.HasValue)
@@ -138,6 +161,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加显存与内存管理相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="memory">内存配置。</param>
     private static void AddMemoryArguments(List<string> args, MemoryConfiguration memory)
     {
         if (memory.VramMode != VramMode.Auto)
@@ -174,6 +202,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加数值精度相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="precision">精度配置。</param>
     private static void AddPrecisionArguments(List<string> args, PrecisionConfiguration precision)
     {
         if (precision.ForcePrecision != ForcePrecisionMode.Default)
@@ -226,6 +259,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加注意力机制相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="attention">注意力配置。</param>
     private static void AddAttentionArguments(List<string> args, AttentionConfiguration attention)
     {
         if (attention.Mode != AttentionMode.Default)
@@ -256,6 +294,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加预览图生成相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="preview">预览配置。</param>
     private static void AddPreviewArguments(List<string> args, PreviewConfiguration preview)
     {
         if (preview.Method != PreviewMethod.None)
@@ -276,6 +319,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加缓存策略相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="cache">缓存配置。</param>
     private static void AddCacheArguments(List<string> args, CacheConfiguration cache)
     {
         switch (cache.Mode)
@@ -297,6 +345,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加 ComfyUI Manager 相关启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="manager">Manager 配置。</param>
     private static void AddManagerArguments(List<string> args, ManagerConfiguration manager)
     {
         if (manager.EnableManager)
@@ -315,6 +368,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加启动行为相关参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="launch">启动配置。</param>
     private static void AddLaunchArguments(List<string> args, LaunchConfiguration launch)
     {
         if (launch.AutoLaunch)
@@ -338,6 +396,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 添加杂项启动参数。
+    /// </summary>
+    /// <param name="args">参数集合。</param>
+    /// <param name="misc">杂项配置。</param>
     private static void AddMiscArguments(List<string> args, MiscellaneousConfiguration misc)
     {
         if (misc.ForceChannelsLast)
@@ -436,6 +499,11 @@ public class ArgumentBuilder
         }
     }
 
+    /// <summary>
+    /// 将日志级别转换为 ComfyUI 识别的命令行值。
+    /// </summary>
+    /// <param name="level">日志级别。</param>
+    /// <returns>对应的命令行字符串值。</returns>
     private static string ToVerboseValue(LogLevel level)
     {
         return level switch
@@ -449,6 +517,11 @@ public class ArgumentBuilder
         };
     }
 
+    /// <summary>
+    /// 在路径包含空格时为其添加引号。
+    /// </summary>
+    /// <param name="value">原始参数值。</param>
+    /// <returns>适合命令行使用的参数值。</returns>
     private static string Quote(string value)
     {
         return value.Contains(' ') ? $"\"{value}\"" : value;

@@ -7,6 +7,9 @@ using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// 应用设置读写服务。
+/// </summary>
 public class SettingsService : ISettingsService
 {
     private readonly JsonSerializerOptions _serializerOptions = new()
@@ -18,6 +21,10 @@ public class SettingsService : ISettingsService
     private readonly string _settingsFilePath;
     private AppSettings _current;
 
+    /// <summary>
+    /// 初始化设置服务并准备设置文件路径。
+    /// </summary>
+    /// <param name="settings">当前应用设置。</param>
     public SettingsService(AppSettings settings)
     {
         _current = settings;
@@ -28,6 +35,10 @@ public class SettingsService : ISettingsService
 
     public AppSettings Current => _current;
 
+    /// <summary>
+    /// 从磁盘加载应用设置，并对旧配置执行规范化修正。
+    /// </summary>
+    /// <returns>当前有效的应用设置对象。</returns>
     public async Task<AppSettings> LoadAsync()
     {
         if (!File.Exists(_settingsFilePath))
@@ -53,6 +64,10 @@ public class SettingsService : ISettingsService
         return _current;
     }
 
+    /// <summary>
+    /// 将应用设置保存到磁盘。
+    /// </summary>
+    /// <param name="settings">待保存的应用设置。</param>
     public async Task SaveAsync(AppSettings settings)
     {
         _current = settings;
@@ -60,6 +75,12 @@ public class SettingsService : ISettingsService
         await JsonSerializer.SerializeAsync(stream, settings, _serializerOptions);
     }
 
+    /// <summary>
+    /// 判断 JSON 根对象中是否包含指定顶层属性。
+    /// </summary>
+    /// <param name="json">JSON 文本。</param>
+    /// <param name="propertyName">要查找的属性名。</param>
+    /// <returns>存在时返回 true，否则返回 false。</returns>
     private static bool HasTopLevelProperty(string json, string propertyName)
     {
         try
@@ -86,6 +107,11 @@ public class SettingsService : ISettingsService
         return false;
     }
 
+    /// <summary>
+    /// 规范化设置中的兼容字段，并返回是否发生改动。
+    /// </summary>
+    /// <param name="settings">待规范化的设置对象。</param>
+    /// <returns>发生字段修正时返回 true，否则返回 false。</returns>
     private static bool NormalizeSettings(AppSettings settings)
     {
         var changed = false;

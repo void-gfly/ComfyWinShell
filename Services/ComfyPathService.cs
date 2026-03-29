@@ -25,12 +25,19 @@ public class ComfyPathService : IComfyPathService
     public bool IsValid { get; private set; }
     public string? ErrorMessage { get; private set; }
 
+    /// <summary>
+    /// 初始化 ComfyUI 路径检测服务，并在创建时立即执行一次检测。
+    /// </summary>
+    /// <param name="appSettings">应用设置对象。</param>
     public ComfyPathService(AppSettings appSettings)
     {
         _appSettings = appSettings;
         Refresh();
     }
 
+    /// <summary>
+    /// 重新检测 ComfyUI 根目录与核心目录。
+    /// </summary>
     public void Refresh()
     {
         ComfyUiPath = null;
@@ -105,6 +112,11 @@ public class ComfyPathService : IComfyPathService
         ErrorMessage = GetNotFoundMessage(appDir);
     }
 
+    /// <summary>
+    /// 判断指定目录是否为有效的 ComfyUI 核心目录。
+    /// </summary>
+    /// <param name="path">待检测的目录路径。</param>
+    /// <returns>目录有效时返回 true，否则返回 false。</returns>
     private static bool IsValidComfyUiDirectory(string path)
     {
         if (!Directory.Exists(path))
@@ -123,6 +135,11 @@ public class ComfyPathService : IComfyPathService
         return false;
     }
 
+    /// <summary>
+    /// 生成未找到 ComfyUI 时的错误提示文本。
+    /// </summary>
+    /// <param name="appDir">当前应用目录。</param>
+    /// <returns>包含建议目录结构的提示信息。</returns>
     private static string GetNotFoundMessage(string appDir)
     {
         var parentDir = Path.GetDirectoryName(appDir) ?? appDir;

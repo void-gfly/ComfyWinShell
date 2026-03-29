@@ -3,6 +3,9 @@ using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// UI 日志分发服务。
+/// </summary>
 public class LogService : ILogService
 {
     /// <summary>
@@ -15,11 +18,20 @@ public class LogService : ILogService
     /// </summary>
     public event EventHandler<LogEntry>? LogEntryReceived;
 
+    /// <summary>
+    /// 记录普通级别日志。
+    /// </summary>
+    /// <param name="message">日志内容。</param>
     public void Log(string message)
     {
         Log(message, GUILogLevel.Info);
     }
 
+    /// <summary>
+    /// 按指定级别记录日志。
+    /// </summary>
+    /// <param name="message">日志内容。</param>
+    /// <param name="level">日志级别。</param>
     public void Log(string message, GUILogLevel level)
     {
         var timestamp = DateTime.Now.ToString("HH:mm:ss");
@@ -37,6 +49,11 @@ public class LogService : ILogService
         LogReceived?.Invoke(this, $"[{timestamp}] {message}");
     }
 
+    /// <summary>
+    /// 记录错误日志，并在存在异常时附带异常信息。
+    /// </summary>
+    /// <param name="message">错误描述。</param>
+    /// <param name="exception">关联异常对象。</param>
     public void LogError(string message, Exception? exception = null)
     {
         var timestamp = DateTime.Now.ToString("HH:mm:ss");

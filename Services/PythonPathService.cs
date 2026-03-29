@@ -5,12 +5,20 @@ using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// Python 可执行文件定位服务。
+/// </summary>
 public class PythonPathService : IPythonPathService
 {
     private readonly AppSettings _appSettings;
     private readonly ILogService _logService;
     private string? _pythonPath;
 
+    /// <summary>
+    /// 初始化 Python 路径服务。
+    /// </summary>
+    /// <param name="appSettings">应用设置对象。</param>
+    /// <param name="logService">日志服务。</param>
     public PythonPathService(AppSettings appSettings, ILogService logService)
     {
         _appSettings = appSettings;
@@ -21,6 +29,10 @@ public class PythonPathService : IPythonPathService
 
     public bool IsValid => !string.IsNullOrWhiteSpace(_pythonPath) && File.Exists(_pythonPath);
 
+    /// <summary>
+    /// 根据 ComfyUI 根目录解析 Python 可执行文件路径。
+    /// </summary>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
     public void Resolve(string comfyRootPath)
     {
         // 1. 先检查配置中的 PythonRoot
@@ -49,6 +61,11 @@ public class PythonPathService : IPythonPathService
         }
     }
 
+    /// <summary>
+    /// 在给定根目录下搜索 Python 可执行文件。
+    /// </summary>
+    /// <param name="rootPath">待搜索的根目录。</param>
+    /// <returns>找到的 Python 路径；找不到时返回系统命令名 python。</returns>
     private string? SearchPython(string rootPath)
     {
         if (string.IsNullOrWhiteSpace(rootPath))
@@ -99,6 +116,9 @@ public class PythonPathService : IPythonPathService
         return "python";
     }
 
+    /// <summary>
+    /// 将解析出的 Python 根目录写回应用配置文件。
+    /// </summary>
     private void SaveSettings()
     {
         try

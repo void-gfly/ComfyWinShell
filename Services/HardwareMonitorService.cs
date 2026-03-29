@@ -3,6 +3,9 @@ using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
 
+/// <summary>
+/// 硬件监控服务实现。
+/// </summary>
 public class HardwareMonitorService : IHardwareMonitorService
 {
     private HwInfo? _hwInfo;
@@ -10,6 +13,10 @@ public class HardwareMonitorService : IHardwareMonitorService
 
     public bool IsAvailable => _hwInfo != null;
 
+    /// <summary>
+    /// 获取当前硬件状态快照。
+    /// </summary>
+    /// <returns>当前硬件信息快照。</returns>
     public HwInfoSnapshot GetSnapshot()
     {
         EnsureInitialized();
@@ -21,6 +28,9 @@ public class HardwareMonitorService : IHardwareMonitorService
         return _hwInfo.GetSnapshot();
     }
 
+    /// <summary>
+    /// 确保底层硬件监控对象只初始化一次。
+    /// </summary>
     private void EnsureInitialized()
     {
         if (_initialized) return;
@@ -37,6 +47,9 @@ public class HardwareMonitorService : IHardwareMonitorService
         }
     }
 
+    /// <summary>
+    /// 释放硬件监控资源。
+    /// </summary>
     public void Dispose()
     {
         _hwInfo?.Dispose();

@@ -30,12 +30,25 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     private readonly IComfyPathService _comfyPathService;
     private readonly ILogService _logService;
 
+    /// <summary>
+    /// 初始化工作流打包服务。
+    /// </summary>
+    /// <param name="comfyPathService">ComfyUI 路径服务。</param>
+    /// <param name="logService">日志服务。</param>
     public WorkflowPackagerService(IComfyPathService comfyPathService, ILogService logService)
     {
         _comfyPathService = comfyPathService;
         _logService = logService;
     }
 
+    /// <summary>
+    /// 打包单个工作流及其依赖文件。
+    /// </summary>
+    /// <param name="analysisResult">工作流分析结果。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <param name="progressPercentage">百分比进度回调。</param>
+    /// <returns>打包结果对象。</returns>
     public async Task<WorkflowPackageResult> PackageWorkflowAsync(
         WorkflowAnalysisResult analysisResult,
         string targetPath,
@@ -128,6 +141,14 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         return result;
     }
 
+    /// <summary>
+    /// 批量打包多个工作流，并合并去重公共依赖。
+    /// </summary>
+    /// <param name="analysisResults">工作流分析结果集合。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <param name="progressPercentage">百分比进度回调。</param>
+    /// <returns>打包结果对象。</returns>
     public async Task<WorkflowPackageResult> PackageBatchWorkflowsAsync(
         List<WorkflowAnalysisResult> analysisResults,
         string targetPath,
@@ -243,6 +264,10 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// <summary>
     /// 复制 ComfyUI 核心文件（排除 models 目录）
     /// </summary>
+    /// <param name="sourcePath">源目录。</param>
+    /// <param name="targetPath">目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <returns>复制的文件数量。</returns>
     private async Task<int> CopyComfyUiFilesAsync(
         string sourcePath,
         string targetPath,
@@ -273,6 +298,10 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// <summary>
     /// 复制与 ComfyUI 同级的 Python 运行环境目录，保持原有目录名与层级。
     /// </summary>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <returns>复制的文件数量。</returns>
     private async Task<int> CopyPythonRuntimeAsync(
         string comfyRootPath,
         string targetPath,
@@ -310,6 +339,14 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// <summary>
     /// 递归复制目录
     /// </summary>
+    /// <param name="sourceDir">源目录。</param>
+    /// <param name="targetDir">目标目录。</param>
+    /// <param name="rootExcludedDirs">根目录排除列表。</param>
+    /// <param name="excludedDirs">通用排除目录列表。</param>
+    /// <param name="nestedExcludedDirs">嵌套目录排除列表。</param>
+    /// <param name="depth">当前递归深度。</param>
+    /// <param name="filesCopied">累计复制文件数。</param>
+    /// <param name="progress">文本进度回调。</param>
     private void CopyDirectoryRecursive(
         string sourceDir,
         string targetDir,
@@ -368,6 +405,11 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// <summary>
     /// 复制工作流所需的模型（支持来自扩展模型目录的模型）
     /// </summary>
+    /// <param name="requiredModels">待复制模型列表。</param>
+    /// <param name="comfyPath">ComfyUI 核心目录。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <returns>复制成功的模型数量。</returns>
     private async Task<int> CopyRequiredModelsAsync(
         List<RequiredModel> requiredModels,
         string comfyPath,
@@ -420,6 +462,8 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// <summary>
     /// 复制工作流文件
     /// </summary>
+    /// <param name="workflowPath">原始工作流文件路径。</param>
+    /// <param name="targetPath">目标目录路径。</param>
     private async Task CopyWorkflowFileAsync(string workflowPath, string targetPath)
     {
         if (!File.Exists(workflowPath))
@@ -439,6 +483,8 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// <summary>
     /// 计算目录大小
     /// </summary>
+    /// <param name="dirPath">待统计目录。</param>
+    /// <returns>目录总字节数。</returns>
     private long CalculateDirectorySize(string dirPath)
     {
         if (!Directory.Exists(dirPath))
@@ -466,6 +512,11 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         return size;
     }
 
+    /// <summary>
+    /// 在 ComfyUI 根目录下定位可用的 Python 运行环境目录。
+    /// </summary>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
+    /// <returns>找到时返回目录路径，否则返回 null。</returns>
     private string? FindPythonRuntimePath(string comfyRootPath)
     {
         if (string.IsNullOrWhiteSpace(comfyRootPath) || !Directory.Exists(comfyRootPath))
@@ -505,6 +556,11 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         return null;
     }
 
+    /// <summary>
+    /// 判断目录中是否存在可用的 Python 可执行文件。
+    /// </summary>
+    /// <param name="directoryPath">待检测目录。</param>
+    /// <returns>存在可执行文件时返回 true，否则返回 false。</returns>
     private static bool HasPythonExecutable(string directoryPath)
     {
         if (!Directory.Exists(directoryPath))
