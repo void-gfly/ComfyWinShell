@@ -139,6 +139,17 @@ public class ConfigurationService : IConfigurationService
             configuration.Paths.ExtraModelBaseDirectory = null;
         }
 
+        if (configuration.Launch.DisableAutoLaunch)
+        {
+            configuration.Launch.AutoLaunch = false;
+        }
+
+        if (configuration.Memory.DisableAsyncOffload)
+        {
+            configuration.Memory.AsyncOffload = false;
+            configuration.Memory.AsyncOffloadStreams = null;
+        }
+
         return configuration;
     }
 }

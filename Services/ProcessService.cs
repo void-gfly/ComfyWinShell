@@ -116,9 +116,25 @@ public class ProcessService : IProcessService, IDisposable
     /// <param name="port">监听端口。</param>
     public void ConfigureApiEndpoint(string listen, int port)
     {
-        var normalizedListen = listen == "0.0.0.0" ? "127.0.0.1" : listen;
+        var normalizedListen = IsAllInterfaceListenAddress(listen) ? "127.0.0.1" : listen;
         _comfyApiUrl = $"http://{normalizedListen}:{port}/system_stats";
         _comfyWsUrl = $"ws://{normalizedListen}:{port}/ws";
+    }
+
+    /// <summary>
+    /// 判断监听地址是否表示所有网卡。
+    /// </summary>
+    /// <param name="listen">监听地址原始值。</param>
+    /// <returns>表示所有网卡时返回 true，否则返回 false。</returns>
+    private static bool IsAllInterfaceListenAddress(string? listen)
+    {
+        if (string.IsNullOrWhiteSpace(listen))
+        {
+            return false;
+        }
+
+        return listen.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(part => part == "0.0.0.0" || part == "::");
     }
 
     /// <summary>

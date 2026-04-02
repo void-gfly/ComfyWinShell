@@ -191,9 +191,23 @@ public class ArgumentBuilder
         {
             args.Add($"--async-offload {memory.AsyncOffloadStreams.Value}");
         }
-        else if (memory.AsyncOffload)
+        else if (memory.AsyncOffload && !memory.DisableAsyncOffload)
         {
             args.Add("--async-offload");
+        }
+
+        if (memory.DisableAsyncOffload)
+        {
+            args.Add("--disable-async-offload");
+        }
+
+        if (memory.DynamicVramMode == DynamicVramMode.Enable)
+        {
+            args.Add("--enable-dynamic-vram");
+        }
+        else if (memory.DynamicVramMode == DynamicVramMode.Disable)
+        {
+            args.Add("--disable-dynamic-vram");
         }
 
         if (!memory.SmartMemory)
@@ -375,7 +389,11 @@ public class ArgumentBuilder
     /// <param name="launch">启动配置。</param>
     private static void AddLaunchArguments(List<string> args, LaunchConfiguration launch)
     {
-        if (launch.AutoLaunch)
+        if (launch.DisableAutoLaunch)
+        {
+            args.Add("--disable-auto-launch");
+        }
+        else if (launch.AutoLaunch)
         {
             args.Add("--auto-launch");
         }
@@ -403,6 +421,11 @@ public class ArgumentBuilder
     /// <param name="misc">杂项配置。</param>
     private static void AddMiscArguments(List<string> args, MiscellaneousConfiguration misc)
     {
+        if (misc.EnableAssets)
+        {
+            args.Add("--enable-assets");
+        }
+
         if (misc.ForceChannelsLast)
         {
             args.Add("--force-channels-last");
@@ -416,6 +439,20 @@ public class ArgumentBuilder
         if (misc.ForceNonBlocking)
         {
             args.Add("--force-non-blocking");
+        }
+
+        if (misc.Fp16Intermediates)
+        {
+            args.Add("--fp16-intermediates");
+        }
+
+        if (misc.CudaMallocMode == CudaMallocMode.Enable)
+        {
+            args.Add("--cuda-malloc");
+        }
+        else if (misc.CudaMallocMode == CudaMallocMode.Disable)
+        {
+            args.Add("--disable-cuda-malloc");
         }
 
         if (!string.IsNullOrWhiteSpace(misc.DefaultHashingFunction) && misc.DefaultHashingFunction != "sha256")
@@ -441,6 +478,11 @@ public class ArgumentBuilder
         if (misc.DisableMmap)
         {
             args.Add("--disable-mmap");
+        }
+
+        if (misc.DisablePinnedMemory)
+        {
+            args.Add("--disable-pinned-memory");
         }
 
         if (misc.DisableMetadata)
@@ -493,10 +535,6 @@ public class ArgumentBuilder
             args.Add($"--database-url {misc.DatabaseUrl}");
         }
 
-        if (misc.DisableAssetsAutoscan)
-        {
-            args.Add("--disable-assets-autoscan");
-        }
     }
 
     /// <summary>

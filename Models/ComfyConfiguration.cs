@@ -233,10 +233,22 @@ public partial class MemoryConfiguration : ObservableObject
     private bool _asyncOffload;
 
     /// <summary>
+    /// 是否禁用异步卸载。
+    /// </summary>
+    [ObservableProperty]
+    private bool _disableAsyncOffload;
+
+    /// <summary>
     /// 异步卸载使用的流数量。
     /// </summary>
     [ObservableProperty]
     private int? _asyncOffloadStreams;
+
+    /// <summary>
+    /// 动态显存策略。
+    /// </summary>
+    [ObservableProperty]
+    private DynamicVramMode _dynamicVramMode = DynamicVramMode.Default;
 
     /// <summary>
     /// 是否启用智能内存管理策略。
@@ -377,6 +389,12 @@ public partial class LaunchConfiguration : ObservableObject
     private bool _autoLaunch;
 
     /// <summary>
+    /// 是否禁用自动打开浏览器。
+    /// </summary>
+    [ObservableProperty]
+    private bool _disableAutoLaunch;
+
+    /// <summary>
     /// 是否禁止在控制台输出服务地址信息。
     /// </summary>
     [ObservableProperty]
@@ -401,6 +419,12 @@ public partial class LaunchConfiguration : ObservableObject
 public partial class MiscellaneousConfiguration : ObservableObject
 {
     /// <summary>
+    /// 是否启用 assets 系统。
+    /// </summary>
+    [ObservableProperty]
+    private bool _enableAssets;
+
+    /// <summary>
     /// 是否强制使用 channels_last 内存布局。
     /// </summary>
     [ObservableProperty]
@@ -417,6 +441,18 @@ public partial class MiscellaneousConfiguration : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _forceNonBlocking;
+
+    /// <summary>
+    /// 是否对节点间中间张量启用 FP16。
+    /// </summary>
+    [ObservableProperty]
+    private bool _fp16Intermediates;
+
+    /// <summary>
+    /// cudaMallocAsync 启用策略。
+    /// </summary>
+    [ObservableProperty]
+    private CudaMallocMode _cudaMallocMode = CudaMallocMode.Default;
 
     /// <summary>
     /// 默认使用的哈希算法名称。
@@ -441,6 +477,12 @@ public partial class MiscellaneousConfiguration : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _disableMmap;
+
+    /// <summary>
+    /// 是否禁用 pinned memory。
+    /// </summary>
+    [ObservableProperty]
+    private bool _disablePinnedMemory;
 
     /// <summary>
     /// 是否仅对 Torch 文件启用内存映射。

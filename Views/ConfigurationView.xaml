@@ -155,17 +155,25 @@
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <WrapPanel Orientation="Horizontal">
-                                <StackPanel Margin="0,0,20,10" ToolTip="指定监听的 IP 地址。默认为 127.0.0.1 (仅本机)。如果设置为 0.0.0.0 则监听所有网络接口。(--listen)">
+                                <StackPanel Margin="0,0,20,10" ToolTip="指定监听的 IP 地址。默认为 127.0.0.1（仅本机）。如果设置为 0.0.0.0 则监听所有网络接口。(--listen)">
                                     <TextBlock Text="监听地址 (Listen)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Network.Listen, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                                    <ComboBox ItemsSource="{Binding ListenAddressPresets}"
+                                              Text="{Binding Configuration.Network.Listen, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="False"
+                                              Width="200"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="设置监听端口。默认为 8188。(--port)">
                                     <TextBlock Text="端口 (Port)" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding Configuration.Network.Port, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
                                 </StackPanel>
-                                <StackPanel Margin="0,0,20,10" ToolTip="添加 Access-Control-Allow-Origin 头到响应中。用于跨域请求。(--cors-header)">
+                                <StackPanel Margin="0,0,20,10" ToolTip="添加 Access-Control-Allow-Origin 头到响应中。留空表示不启用，* 表示允许任意来源，也可填写具体来源。(--enable-cors-header)">
                                     <TextBlock Text="CORS 来源" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Network.CorsOrigin, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                                    <ComboBox ItemsSource="{Binding CorsOriginPresets}"
+                                              Text="{Binding Configuration.Network.CorsOrigin, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="False"
+                                              Width="220"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,0,10" ToolTip="设置最大上传文件大小(MB)。默认为 100MB。(--max-upload-size)">
                                     <TextBlock Text="最大上传 (MB)" Style="{StaticResource FieldLabel}"/>
@@ -306,8 +314,15 @@
                                     <TextBox Text="{Binding Configuration.Memory.AsyncOffloadStreams, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="120"/>
                                 </StackPanel>
                             </WrapPanel>
+                            <WrapPanel Margin="0,10,0,0">
+                                <StackPanel Margin="0,0,20,10" ToolTip="控制动态显存策略。Enable 强制启用，Disable 强制禁用，其余保持 ComfyUI 默认行为。">
+                                    <TextBlock Text="动态显存" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox ItemsSource="{Binding DynamicVramModes}" SelectedItem="{Binding Configuration.Memory.DynamicVramMode}" Width="180"/>
+                                </StackPanel>
+                            </WrapPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                 <CheckBox Content="异步卸载 (Async Offload)" IsChecked="{Binding Configuration.Memory.AsyncOffload}" Margin="0,0,20,0" ToolTip="启用模型异步卸载到系统内存。"/>
+                                <CheckBox Content="禁用异步卸载" IsChecked="{Binding Configuration.Memory.DisableAsyncOffload}" Margin="0,0,20,0" ToolTip="显式禁用异步卸载。(--disable-async-offload)"/>
                                 <CheckBox Content="智能内存 (Smart Memory)" IsChecked="{Binding Configuration.Memory.SmartMemory}" ToolTip="启用智能内存管理 (此选项可能会被 ComfyUI 默认启用)。(--disable-smart-memory to disable)"/>
                             </StackPanel>
                         </StackPanel>
@@ -438,6 +453,7 @@
                             </Grid>
                             <StackPanel Orientation="Horizontal">
                                 <CheckBox Content="自动启动浏览器" IsChecked="{Binding Configuration.Launch.AutoLaunch}" Margin="0,0,20,0" ToolTip="启动后自动打开默认浏览器访问。(--auto-launch)"/>
+                                <CheckBox Content="禁止自动启动浏览器" IsChecked="{Binding Configuration.Launch.DisableAutoLaunch}" Margin="0,0,20,0" ToolTip="显式禁用自动打开浏览器。(--disable-auto-launch)"/>
                                 <CheckBox Content="不打印服务器信息" IsChecked="{Binding Configuration.Launch.DontPrintServer}" ToolTip="启动时不打印服务器信息。(--dont-print-server)"/>
                             </StackPanel>
                         </StackPanel>
@@ -449,11 +465,14 @@
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <WrapPanel Margin="0,0,0,10">
+                                <CheckBox Content="启用 Assets 系统" IsChecked="{Binding Configuration.Miscellaneous.EnableAssets}" Margin="0,0,20,8" ToolTip="启用 assets API、数据库同步和后台扫描。(--enable-assets)"/>
                                 <CheckBox Content="Force Channels Last" IsChecked="{Binding Configuration.Miscellaneous.ForceChannelsLast}" Margin="0,0,20,8" ToolTip="强制将张量通道放在最后。(--force-channels-last)"/>
                                 <CheckBox Content="支持 FP8 计算" IsChecked="{Binding Configuration.Miscellaneous.SupportsFp8Compute}" Margin="0,0,20,8" ToolTip="启用 FP8 计算支持。仅在部分新显卡上支持。"/>
                                 <CheckBox Content="强制非阻塞" IsChecked="{Binding Configuration.Miscellaneous.ForceNonBlocking}" Margin="0,0,20,8" ToolTip="强制操作非阻塞。(--force-non-blocking)"/>
+                                <CheckBox Content="FP16 中间张量" IsChecked="{Binding Configuration.Miscellaneous.Fp16Intermediates}" Margin="0,0,20,8" ToolTip="实验功能：节点间中间张量使用 FP16。(--fp16-intermediates)"/>
                                 <CheckBox Content="确定性计算" IsChecked="{Binding Configuration.Miscellaneous.Deterministic}" Margin="0,0,20,8" ToolTip="使用确定性算法，使结果可重现。可能会降低性能。(--use-deterministic-algorithms)"/>
                                 <CheckBox Content="禁用 Mmap" IsChecked="{Binding Configuration.Miscellaneous.DisableMmap}" Margin="0,0,20,8" ToolTip="禁用内存映射文件加载。(--disable-mmap)"/>
+                                <CheckBox Content="禁用 Pinned Memory" IsChecked="{Binding Configuration.Miscellaneous.DisablePinnedMemory}" Margin="0,0,20,8" ToolTip="禁用 pinned memory 使用。(--disable-pinned-memory)"/>
                                 <CheckBox Content="Mmap Torch Files" IsChecked="{Binding Configuration.Miscellaneous.MmapTorchFiles}" Margin="0,0,20,8" ToolTip="对 Torch 文件使用内存映射。"/>
                                 <CheckBox Content="禁用元数据" IsChecked="{Binding Configuration.Miscellaneous.DisableMetadata}" Margin="0,0,20,8" ToolTip="生成的图像不保存元数据（如工作流信息）。(--disable-metadata)"/>
                                 <CheckBox Content="禁用所有自定义节点" IsChecked="{Binding Configuration.Miscellaneous.DisableAllCustomNodes}" Margin="0,0,20,8" ToolTip="禁用所有已安装的自定义节点。(--disable-all-custom-nodes)"/>
@@ -461,10 +480,13 @@
                                 <CheckBox Content="多用户模式" IsChecked="{Binding Configuration.Miscellaneous.MultiUser}" Margin="0,0,20,8" ToolTip="启用多用户支持。(--multi-user)"/>
                                 <CheckBox Content="日志输出到 Stdout" IsChecked="{Binding Configuration.Miscellaneous.LogStdout}" Margin="0,0,20,8" ToolTip="将日志输出到标准输出流。"/>
                                 <CheckBox Content="压缩响应体" IsChecked="{Binding Configuration.Miscellaneous.EnableCompressResponseBody}" Margin="0,0,20,8" ToolTip="启用 HTTP 响应体压缩。"/>
-                                <CheckBox Content="禁用资源自动扫描" IsChecked="{Binding Configuration.Miscellaneous.DisableAssetsAutoscan}" Margin="0,0,0,8" ToolTip="禁用启动时的资源文件自动扫描。"/>
                             </WrapPanel>
 
                             <WrapPanel Margin="0,0,0,10">
+                                <StackPanel Margin="0,0,20,10" ToolTip="控制 cudaMallocAsync 策略。Enable 强制启用，Disable 强制禁用，其余保持 ComfyUI 默认行为。">
+                                    <TextBlock Text="CUDA Malloc" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox ItemsSource="{Binding CudaMallocModes}" SelectedItem="{Binding Configuration.Miscellaneous.CudaMallocMode}" Width="180"/>
+                                </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="设置默认的哈希函数。默认为 sha256。">
                                     <TextBlock Text="默认哈希函数" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding Configuration.Miscellaneous.DefaultHashingFunction, UpdateSourceTrigger=PropertyChanged}" Width="180"/>

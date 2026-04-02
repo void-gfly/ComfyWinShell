@@ -103,7 +103,30 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
     public IReadOnlyList<CacheMode> CacheModes { get; } = Enum.GetValues<CacheMode>();
 
+    public IReadOnlyList<DynamicVramMode> DynamicVramModes { get; } = Enum.GetValues<DynamicVramMode>();
+
+    public IReadOnlyList<CudaMallocMode> CudaMallocModes { get; } = Enum.GetValues<CudaMallocMode>();
+
     public IReadOnlyList<LogLevel> LogLevels { get; } = Enum.GetValues<LogLevel>();
+
+    public IReadOnlyList<string> ListenAddressPresets { get; } =
+    [
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1"
+    ];
+
+    public IReadOnlyList<string> CorsOriginPresets { get; } =
+    [
+        string.Empty,
+        "*",
+        "http://127.0.0.1:8188",
+        "http://localhost:8188",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173"
+    ];
 
     /// <summary>
     /// 可选的 CUDA 设备列表
