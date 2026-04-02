@@ -155,7 +155,7 @@
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <WrapPanel Orientation="Horizontal">
-                                <StackPanel Margin="0,0,20,10" ToolTip="指定监听的 IP 地址。默认为 127.0.0.1（仅本机）。如果设置为 0.0.0.0 则监听所有网络接口。(--listen)">
+                                <StackPanel Margin="0,0,20,10" ToolTip="指定监听的 IP 地址。默认为 127.0.0.1（仅本机）。官方当前推荐的全接口值为 0.0.0.0,::；如果命令行仅写 --listen 不带参数，也会默认使用该值。(--listen)">
                                     <TextBlock Text="监听地址 (Listen)" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding ListenAddressPresets}"
                                               Text="{Binding Configuration.Network.Listen, UpdateSourceTrigger=PropertyChanged}"

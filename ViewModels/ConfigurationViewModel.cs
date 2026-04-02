@@ -112,7 +112,9 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     public IReadOnlyList<string> ListenAddressPresets { get; } =
     [
         "127.0.0.1",
+        "0.0.0.0,::",
         "0.0.0.0",
+        "::",
         "::1"
     ];
 
