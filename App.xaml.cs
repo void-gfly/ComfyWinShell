@@ -31,6 +31,8 @@ namespace WpfDesktop
         {
             // 必须先调用 base.OnStartup 以加载 App.xaml 中的资源
             base.OnStartup(e);
+            // 隐藏窗口到托盘时不自动退出应用
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
             EnsureDefaultAppSettingsFileExists();
 
             try

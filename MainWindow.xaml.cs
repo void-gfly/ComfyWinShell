@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
+using H.NotifyIcon;
+using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 using WpfDesktop.ViewModels;
 using WpfDesktop.Views;
@@ -13,12 +16,16 @@ namespace WpfDesktop
     public partial class MainWindow : Window
     {
         private readonly IProcessService _processService;
+        private readonly MainViewModel _viewModel;
         private bool _allowClose;
         private bool _shutdownInProgress;
+        private TaskbarIcon? _trayIcon;
+        private MenuItem? _serviceMenuItem;
 
         public MainWindow(MainViewModel viewModel, IProcessService processService)
         {
             _processService = processService;
+            _viewModel = viewModel;
 
             Debug.WriteLine($"MainWindow 构造函数: viewModel={viewModel != null}");
             Debug.WriteLine($"MainWindow 构造函数: CurrentView={viewModel?.CurrentView?.GetType().Name ?? "null"}");
@@ -27,22 +34,93 @@ namespace WpfDesktop
             DataContext = viewModel;
             
             Debug.WriteLine($"MainWindow DataContext 设置完成: {DataContext != null}");
+
+            InitializeTrayIcon();
         }
 
-        private async void MainWindow_OnClosing(object? sender, CancelEventArgs e)
+        private void InitializeTrayIcon()
         {
-            if (_allowClose)
+            // 优先从文件加载，失败则从 exe 嵌入图标提取
+            System.Drawing.Icon? icon = null;
+            try
             {
-                return;
+                var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logo.ico");
+                if (System.IO.File.Exists(icoPath))
+                {
+                    icon = new System.Drawing.Icon(icoPath);
+                }
+                else
+                {
+                    var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                    if (exePath != null)
+                        icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"加载托盘图标失败: {ex.Message}");
             }
 
-            if (_shutdownInProgress)
-            {
-                e.Cancel = true;
-                return;
-            }
+            // 显示窗口
+            var showMenuItem = new MenuItem { Header = "显示窗口" };
+            showMenuItem.Click += (_, _) => ShowWindowFromTray();
 
-            e.Cancel = true;
+            // 服务子菜单项
+            _serviceMenuItem = new MenuItem { Header = "启动" };
+            _serviceMenuItem.Click += async (_, _) => await _viewModel.ToggleProcessCommand.ExecuteAsync(null);
+
+            var serviceParentMenuItem = new MenuItem { Header = "ComfyUI 服务" };
+            serviceParentMenuItem.Items.Add(_serviceMenuItem);
+
+            // 退出
+            var exitMenuItem = new MenuItem { Header = "退出" };
+            exitMenuItem.Click += async (_, _) => await TrayExitAsync();
+
+            var contextMenu = new ContextMenu();
+            contextMenu.Items.Add(showMenuItem);
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(serviceParentMenuItem);
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(exitMenuItem);
+
+            _trayIcon = new TaskbarIcon
+            {
+                ToolTipText = "ComfyShell",
+                ContextMenu = contextMenu,
+                Icon = icon
+            };
+            _trayIcon.TrayMouseDoubleClick += (_, _) => ShowWindowFromTray();
+
+            // 通过代码创建（非 XAML）时必须调用 ForceCreate，否则图标不会出现在系统托盘
+            _trayIcon.ForceCreate();
+
+            _processService.StatusChanged += OnProcessStatusChanged;
+        }
+
+        private void OnProcessStatusChanged(object? sender, ProcessStatus status)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (_serviceMenuItem == null) return;
+                _serviceMenuItem.Header = status.IsRunning
+                    ? $"停止 ({_viewModel.CurrentEndpointText})"
+                    : "启动";
+            });
+        }
+
+        private void ShowWindowFromTray()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+
+        private async Task TrayExitAsync()
+        {
+            ShowWindowFromTray();
+
+            if (_shutdownInProgress) return;
+
             _shutdownInProgress = true;
             try
             {
@@ -58,6 +136,33 @@ namespace WpfDesktop
             {
                 _shutdownInProgress = false;
             }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _processService.StatusChanged -= OnProcessStatusChanged;
+            _trayIcon?.Dispose();
+            _trayIcon = null;
+            base.OnClosed(e);
+            Application.Current.Shutdown();
+        }
+
+        private async void MainWindow_OnClosing(object? sender, CancelEventArgs e)
+        {
+            if (_allowClose)
+            {
+                return;
+            }
+
+            if (_shutdownInProgress)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            // 点击关闭按钮时隐藏到系统托盘
+            e.Cancel = true;
+            Hide();
         }
 
         private async Task ShutdownComfyUiAsync()

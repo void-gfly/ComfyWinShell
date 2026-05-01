@@ -73,6 +73,7 @@ public partial class MainViewModel : ViewModelBase
     public IRelayCommand OpenWebPageCommand { get; }
     public string WebUiBaseUrl => $"http://127.0.0.1:{_currentConfiguration?.Network.Port ?? 8188}";
     public string OpenWebPageToolTip => $"在浏览器打开 {WebUiBaseUrl} (ComfyUI WebUI BaseUrl)";
+    public string CurrentEndpointText => $"{_currentConfiguration?.Network.Listen ?? "127.0.0.1"}:{_currentConfiguration?.Network.Port ?? 8188}";
 
     public MainViewModel(
         DashboardViewModel dashboardViewModel,
@@ -201,6 +202,7 @@ public partial class MainViewModel : ViewModelBase
             _processService.ConfigureApiEndpoint(_currentConfiguration.Network.Listen, _currentConfiguration.Network.Port);
             OnPropertyChanged(nameof(WebUiBaseUrl));
             OnPropertyChanged(nameof(OpenWebPageToolTip));
+            OnPropertyChanged(nameof(CurrentEndpointText));
 
             if (!_startupCleanupCompleted && _comfyPathService.IsValid && !string.IsNullOrWhiteSpace(_comfyPathService.ComfyRootPath))
             {
