@@ -20,6 +20,7 @@ namespace WpfDesktop
         private bool _allowClose;
         private bool _shutdownInProgress;
         private TaskbarIcon? _trayIcon;
+        private MenuItem? _appNameMenuItem;
         private MenuItem? _serviceMenuItem;
 
         public MainWindow(MainViewModel viewModel, IProcessService processService)
@@ -62,6 +63,9 @@ namespace WpfDesktop
             }
 
             // 显示窗口
+            _appNameMenuItem = new MenuItem { IsEnabled = false };
+            UpdateTrayAppName(_viewModel.AppName, _viewModel.AppVersionText);
+
             var showMenuItem = new MenuItem { Header = "显示窗口" };
             showMenuItem.Click += (_, _) => ShowWindowFromTray();
 
@@ -77,6 +81,7 @@ namespace WpfDesktop
             exitMenuItem.Click += async (_, _) => await TrayExitAsync();
 
             var contextMenu = new ContextMenu();
+            contextMenu.Items.Add(_appNameMenuItem);
             contextMenu.Items.Add(showMenuItem);
             contextMenu.Items.Add(new Separator());
             contextMenu.Items.Add(serviceParentMenuItem);
@@ -89,6 +94,8 @@ namespace WpfDesktop
                 ContextMenu = contextMenu,
                 Icon = icon
             };
+            UpdateTrayAppName(_viewModel.AppName, _viewModel.AppVersionText);
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _trayIcon.TrayMouseDoubleClick += (_, _) => ShowWindowFromTray();
 
             // 通过代码创建（非 XAML）时必须调用 ForceCreate，否则图标不会出现在系统托盘
@@ -106,6 +113,35 @@ namespace WpfDesktop
                     ? $"停止 ({_viewModel.CurrentEndpointText})"
                     : "启动";
             });
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (!string.Equals(e.PropertyName, nameof(MainViewModel.AppName), StringComparison.Ordinal)
+                && !string.Equals(e.PropertyName, nameof(MainViewModel.AppVersionText), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Dispatcher.Invoke(() => UpdateTrayAppName(_viewModel.AppName, _viewModel.AppVersionText));
+        }
+
+        private void UpdateTrayAppName(string? appName, string? appVersionText)
+        {
+            var displayName = string.IsNullOrWhiteSpace(appName) ? "ComfyShell" : appName;
+            var versionText = string.IsNullOrWhiteSpace(appVersionText) ? string.Empty : appVersionText.Trim();
+
+            if (_appNameMenuItem != null)
+            {
+                _appNameMenuItem.Header = string.IsNullOrWhiteSpace(versionText)
+                    ? displayName
+                    : $"{displayName} {versionText}";
+            }
+
+            if (_trayIcon != null)
+            {
+                _trayIcon.ToolTipText = displayName;
+            }
         }
 
         private void ShowWindowFromTray()
@@ -141,6 +177,7 @@ namespace WpfDesktop
         protected override void OnClosed(EventArgs e)
         {
             _processService.StatusChanged -= OnProcessStatusChanged;
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _trayIcon?.Dispose();
             _trayIcon = null;
             base.OnClosed(e);
