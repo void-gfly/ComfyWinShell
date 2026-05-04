@@ -58,6 +58,7 @@ namespace WpfDesktop
                         services.AddSingleton<IVersionService, VersionService>();
                         services.AddSingleton<IComfyPathService, ComfyPathService>();
                         services.AddSingleton<IPythonPathService, PythonPathService>();
+                        services.AddSingleton<ICudaDeviceDiscoveryService, CudaDeviceDiscoveryService>();
                         services.AddSingleton<IProxyService, ProxyService>();
                         services.AddSingleton<IGitService, GitService>();
                         services.AddSingleton<IProcessService, ProcessService>();

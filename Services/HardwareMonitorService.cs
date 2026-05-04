@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
@@ -9,7 +10,13 @@ namespace WpfDesktop.Services;
 public class HardwareMonitorService : IHardwareMonitorService
 {
     private HwInfo? _hwInfo;
+    private readonly ICudaDeviceDiscoveryService _cudaDeviceDiscoveryService;
     private bool _initialized;
+
+    public HardwareMonitorService(ICudaDeviceDiscoveryService cudaDeviceDiscoveryService)
+    {
+        _cudaDeviceDiscoveryService = cudaDeviceDiscoveryService;
+    }
 
     public bool IsAvailable => _hwInfo != null;
 
@@ -25,7 +32,15 @@ public class HardwareMonitorService : IHardwareMonitorService
             return new HwInfoSnapshot();
         }
 
-        return _hwInfo.GetSnapshot();
+        var snapshot = _hwInfo.GetSnapshot();
+        var cudaDevices = _cudaDeviceDiscoveryService.GetCudaDevices();
+        if (snapshot.Gpus.Count == 0 || cudaDevices.Count == 0)
+        {
+            return snapshot;
+        }
+
+        snapshot.Gpus = CudaDeviceOrderHelper.OrderGpusByCudaDevices(snapshot.Gpus, cudaDevices);
+        return snapshot;
     }
 
     /// <summary>
