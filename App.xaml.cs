@@ -23,6 +23,7 @@ namespace WpfDesktop
     {
         private IHost? _host;
         private ILogService? _logService;
+        private AppInstanceLock? _instanceLock;
         private int _fatalExceptionHandled;
 
         public IHost? AppHost => _host;
@@ -37,6 +38,15 @@ namespace WpfDesktop
 
             try
             {
+                var startupSettings = LoadStartupAppSettings();
+                _instanceLock = AppInstanceLockHelper.TryAcquire(startupSettings.AppName);
+                if (_instanceLock == null)
+                {
+                    MessageBox.Show("同一个 AppName 的程序实例已经在运行。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    Shutdown();
+                    return;
+                }
+
                 _host = Host.CreateDefaultBuilder()
                     .ConfigureAppConfiguration((context, config) =>
                     {
@@ -133,6 +143,9 @@ namespace WpfDesktop
                 _host = null;
             }
 
+            _instanceLock?.Dispose();
+            _instanceLock = null;
+
             base.OnExit(e);
         }
 
@@ -174,6 +187,26 @@ namespace WpfDesktop
             });
 
             File.WriteAllText(settingsPath, json);
+        }
+
+        private static AppSettings LoadStartupAppSettings()
+        {
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+                .Build();
+
+            var appSettings = configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
+            var settingsPath = Path.Combine(PathHelper.ResolveDataRoot(appSettings.DataRoot), "settings.json");
+
+            if (!File.Exists(settingsPath))
+            {
+                return appSettings;
+            }
+
+            var json = File.ReadAllText(settingsPath);
+            var runtimeSettings = JsonSerializer.Deserialize<AppSettings>(json);
+            return runtimeSettings ?? appSettings;
         }
 
         private void RegisterGlobalExceptionHandlers()
