@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using WpfDesktop.Models;
 using WpfDesktop.Models.Enums;
@@ -177,6 +178,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         try
         {
             await _configurationService.SaveConfigurationAsync(_currentProfileId, Configuration);
+            WeakReferenceMessenger.Default.Send(new ComfyConfigurationChangedMessage(_currentProfileId));
             
             // 如果设置了扩展模型目录，自动生成 extra_model_paths.yaml
             await GenerateExtraModelPathsYamlAsync();

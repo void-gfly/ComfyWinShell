@@ -188,6 +188,14 @@
                                                FontSize="12" Opacity="0.5" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Grid>
+
+                            <StackPanel Margin="0,25,0,0">
+                                <CheckBox IsChecked="{Binding Settings.ShowSelectedGpuOnly}">
+                                    <TextBlock Text="只显示选中的 GPU 占用" FontSize="14" FontWeight="Medium"/>
+                                </CheckBox>
+                                <TextBlock Text="开启后，顶部栏只显示 ComfyUI 配置中选中的 CUDA 设备；如果未选择 GPU，则仍显示全部 GPU。"
+                                           FontSize="12" Opacity="0.5" Margin="22,6,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </Expander>

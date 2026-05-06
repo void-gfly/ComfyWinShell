@@ -135,7 +135,19 @@ public partial class MainViewModel : ViewModelBase
 
         WeakReferenceMessenger.Default.Register<AppSettingsChangedMessage>(this, (_, message) =>
         {
-            RunOnUiThread(() => UpdateAppTitle(message.Value));
+            RunOnUiThread(() =>
+            {
+                UpdateAppTitle(message.Value);
+                RefreshGpuStatusSummary();
+            });
+        });
+
+        WeakReferenceMessenger.Default.Register<ComfyConfigurationChangedMessage>(this, (_, message) =>
+        {
+            RunOnUiThread(() =>
+            {
+                _ = ReloadCurrentConfigurationAsync(message.Value);
+            });
         });
 
         _gpuStatusTimer = new DispatcherTimer
@@ -225,6 +237,7 @@ public partial class MainViewModel : ViewModelBase
             UpdateStatus(status);
 
             LastUpdated = DateTime.Now;
+            RefreshGpuStatusSummary();
         }
         finally
         {
@@ -366,7 +379,38 @@ public partial class MainViewModel : ViewModelBase
     private async Task LoadAppTitleAsync()
     {
         var settings = await _settingsService.LoadAsync();
-        RunOnUiThread(() => UpdateAppTitle(settings));
+        RunOnUiThread(() =>
+        {
+            UpdateAppTitle(settings);
+            RefreshGpuStatusSummary();
+        });
+    }
+
+    private async Task ReloadCurrentConfigurationAsync(string profileId)
+    {
+        if (string.IsNullOrWhiteSpace(profileId))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!string.Equals(profileId, _activeProfileId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _currentConfiguration = await _configurationService.LoadConfigurationAsync(_activeProfileId);
+            _processService.ConfigureApiEndpoint(_currentConfiguration.Network.Listen, _currentConfiguration.Network.Port);
+            OnPropertyChanged(nameof(WebUiBaseUrl));
+            OnPropertyChanged(nameof(OpenWebPageToolTip));
+            OnPropertyChanged(nameof(CurrentEndpointText));
+            RefreshGpuStatusSummary();
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("重新加载 ComfyUI 配置失败", ex);
+        }
     }
 
     [ObservableProperty]
@@ -526,6 +570,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var snapshot = _hardwareMonitorService.GetSnapshot();
+            var settings = _settingsService.Current;
             var cpuPercent = snapshot.CpuLoadPercent.HasValue ? Math.Clamp(snapshot.CpuLoadPercent.Value, 0, 100) : 0;
             var cpuMemoryPercent = ResolveMemoryPercent(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);
 
@@ -540,7 +585,10 @@ public partial class MainViewModel : ViewModelBase
             CpuStatusItem.LoadRingColor = "#F6A23A";
             CpuStatusItem.MemoryRingColor = "#C084FC";
 
-            var gpuSnapshots = snapshot.Gpus;
+            var gpuSnapshots = GpuDisplaySelectionHelper.SelectVisibleGpus(
+                snapshot.Gpus,
+                settings.ShowSelectedGpuOnly,
+                _currentConfiguration?.Device?.CudaDevice);
             if (gpuSnapshots.Count == 0)
             {
                 GpuStatusItems.Clear();

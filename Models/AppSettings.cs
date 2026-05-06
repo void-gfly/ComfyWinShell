@@ -31,6 +31,11 @@ public class AppSettings
     public int LogLineHeight { get; set; } = 15;
 
     /// <summary>
+    /// 是否只在顶部栏显示 ComfyUI 当前选中的 GPU。
+    /// </summary>
+    public bool ShowSelectedGpuOnly { get; set; }
+
+    /// <summary>
     /// 应用数据默认存储的根目录。
     /// </summary>
     public string DataRoot { get; set; } = "data";
