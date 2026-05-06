@@ -24,6 +24,7 @@ namespace WpfDesktop
         private IHost? _host;
         private ILogService? _logService;
         private AppInstanceLock? _instanceLock;
+        private StartupSplashWindow? _startupSplashWindow;
         private int _fatalExceptionHandled;
 
         public IHost? AppHost => _host;
@@ -34,79 +35,27 @@ namespace WpfDesktop
             base.OnStartup(e);
             // 隐藏窗口到托盘时不自动退出应用
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            EnsureDefaultAppSettingsFileExists();
 
             try
             {
+                EnsureDefaultAppSettingsFileExists();
+                ShowStartupSplash();
+
                 var startupSettings = LoadStartupAppSettings();
                 _instanceLock = AppInstanceLockHelper.TryAcquire(startupSettings.AppName);
                 if (_instanceLock == null)
                 {
+                    CloseStartupSplash();
                     MessageBox.Show("同一个 AppName 的程序实例已经在运行。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                     Shutdown();
                     return;
                 }
 
-                _host = Host.CreateDefaultBuilder()
-                    .ConfigureAppConfiguration((context, config) =>
-                    {
-                        config.SetBasePath(AppContext.BaseDirectory);
-                        config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-                    })
-                    .ConfigureServices((context, services) =>
-                    {
-                        services.Configure<AppSettings>(context.Configuration.GetSection("AppSettings"));
-                        var appSettings = context.Configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
-                        services.AddSingleton(appSettings);
-
-                        services.AddSingleton<ArgumentBuilder>();
-                        services.AddSingleton<IDialogService, DialogService>();
-                        services.AddSingleton<ISettingsService, SettingsService>();
-                        services.AddSingleton<ILogService, LogService>();
-                        services.AddSingleton<IConfigurationService, ConfigurationService>();
-                        services.AddSingleton<IProfileService, ProfileService>();
-                        services.AddSingleton<IVersionService, VersionService>();
-                        services.AddSingleton<IComfyPathService, ComfyPathService>();
-                        services.AddSingleton<IPythonPathService, PythonPathService>();
-                        services.AddSingleton<ICudaDeviceDiscoveryService, CudaDeviceDiscoveryService>();
-                        services.AddSingleton<IProxyService, ProxyService>();
-                        services.AddSingleton<IGitService, GitService>();
-                        services.AddSingleton<IProcessService, ProcessService>();
-                        services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();
-                        services.AddSingleton<IResourceService, ResourceService>();
-                        services.AddSingleton<IEnvironmentCheckService, EnvironmentCheckService>();
-                        services.AddSingleton<IWorkflowAnalyzerService, WorkflowAnalyzerService>();
-                        services.AddSingleton<IWorkflowPackagerService, WorkflowPackagerService>();
-
-                        services.AddSingleton<DashboardViewModel>();
-                        services.AddSingleton<ConfigurationViewModel>();
-                        services.AddSingleton<VersionManagerViewModel>();
-                        services.AddSingleton<ProfileManagerViewModel>();
-                        services.AddSingleton<ProcessMonitorViewModel>();
-                        services.AddSingleton<HardwareMonitorViewModel>();
-                        services.AddSingleton<SettingsViewModel>();
-                        services.AddSingleton<ResourcesViewModel>();
-                        services.AddSingleton<MainViewModel>();
-
-                        services.AddSingleton<MainWindow>();
-                    })
-                    .ConfigureLogging(logging =>
-                    {
-                        logging.AddDebug();
-                    })
-                    .Build();
-
-                _host.Start();
-
-                // 获取 LogService 用于全局异常处理
-                _logService = _host.Services.GetRequiredService<ILogService>();
-                RegisterGlobalExceptionHandlers();
-
-                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-                mainWindow.Show();
+                Dispatcher.BeginInvoke(new Action(() => _ = InitializeApplicationAsync()), System.Windows.Threading.DispatcherPriority.Background);
             }
             catch (Exception ex)
             {
+                CloseStartupSplash();
                 HandleFatalException(ex, "应用启动异常");
             }
         }
@@ -207,6 +156,105 @@ namespace WpfDesktop
             var json = File.ReadAllText(settingsPath);
             var runtimeSettings = JsonSerializer.Deserialize<AppSettings>(json);
             return runtimeSettings ?? appSettings;
+        }
+
+        private void ShowStartupSplash()
+        {
+            _startupSplashWindow = new StartupSplashWindow();
+            _startupSplashWindow.Show();
+        }
+
+        private void CloseStartupSplash()
+        {
+            try
+            {
+                _startupSplashWindow?.Close();
+            }
+            catch
+            {
+                // 启动封面关闭失败不影响主流程
+            }
+            finally
+            {
+                _startupSplashWindow = null;
+            }
+        }
+
+        private async Task InitializeApplicationAsync()
+        {
+            try
+            {
+                _host = await Task.Run(CreateAndStartHost);
+
+                // 获取 LogService 用于全局异常处理
+                _logService = _host.Services.GetRequiredService<ILogService>();
+                RegisterGlobalExceptionHandlers();
+
+                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                MainWindow = mainWindow;
+                CloseStartupSplash();
+                mainWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                CloseStartupSplash();
+                HandleFatalException(ex, "应用启动异常");
+            }
+        }
+
+        private IHost CreateAndStartHost()
+        {
+            var host = Host.CreateDefaultBuilder()
+                .ConfigureAppConfiguration((context, config) =>
+                {
+                    config.SetBasePath(AppContext.BaseDirectory);
+                    config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                })
+                .ConfigureServices((context, services) =>
+                {
+                    services.Configure<AppSettings>(context.Configuration.GetSection("AppSettings"));
+                    var appSettings = context.Configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
+                    services.AddSingleton(appSettings);
+
+                    services.AddSingleton<ArgumentBuilder>();
+                    services.AddSingleton<IDialogService, DialogService>();
+                    services.AddSingleton<ISettingsService, SettingsService>();
+                    services.AddSingleton<ILogService, LogService>();
+                    services.AddSingleton<IConfigurationService, ConfigurationService>();
+                    services.AddSingleton<IProfileService, ProfileService>();
+                    services.AddSingleton<IVersionService, VersionService>();
+                    services.AddSingleton<IComfyPathService, ComfyPathService>();
+                    services.AddSingleton<IPythonPathService, PythonPathService>();
+                    services.AddSingleton<ICudaDeviceDiscoveryService, CudaDeviceDiscoveryService>();
+                    services.AddSingleton<IProxyService, ProxyService>();
+                    services.AddSingleton<IGitService, GitService>();
+                    services.AddSingleton<IProcessService, ProcessService>();
+                    services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();
+                    services.AddSingleton<IResourceService, ResourceService>();
+                    services.AddSingleton<IEnvironmentCheckService, EnvironmentCheckService>();
+                    services.AddSingleton<IWorkflowAnalyzerService, WorkflowAnalyzerService>();
+                    services.AddSingleton<IWorkflowPackagerService, WorkflowPackagerService>();
+
+                    services.AddSingleton<DashboardViewModel>();
+                    services.AddSingleton<ConfigurationViewModel>();
+                    services.AddSingleton<VersionManagerViewModel>();
+                    services.AddSingleton<ProfileManagerViewModel>();
+                    services.AddSingleton<ProcessMonitorViewModel>();
+                    services.AddSingleton<HardwareMonitorViewModel>();
+                    services.AddSingleton<SettingsViewModel>();
+                    services.AddSingleton<ResourcesViewModel>();
+                    services.AddSingleton<MainViewModel>();
+
+                    services.AddSingleton<MainWindow>();
+                })
+                .ConfigureLogging(logging =>
+                {
+                    logging.AddDebug();
+                })
+                .Build();
+
+            host.Start();
+            return host;
         }
 
         private void RegisterGlobalExceptionHandlers()
