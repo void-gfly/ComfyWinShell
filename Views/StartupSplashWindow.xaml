@@ -17,7 +17,7 @@
             BorderBrush="#26000000"
             BorderThickness="1">
         <Grid>
-            <Image Source="pack://siteoforigin:,,,/Resources/Images/StartupSplash.png"
+            <Image Source="pack://siteoforigin:,,,/Resources/Images/StartupSplash.jpg"
                    Stretch="UniformToFill"
                    HorizontalAlignment="Stretch"
                    VerticalAlignment="Stretch"/>
