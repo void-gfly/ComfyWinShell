@@ -143,26 +143,34 @@
                     <TextBlock Text="磁盘 I/O" Style="{StaticResource SectionTitleStyle}"/>
 
                     <Grid Grid.Row="1">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Text="读取速度" Style="{StaticResource MetricLabelStyle}"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding DiskReadText}" Style="{StaticResource MetricValueStyle}"/>
-                                <TextBlock Text="{Binding DiskReadChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
-                            </StackPanel>
-                        </StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="1" Margin="0,0,10,0">
-                            <TextBlock Text="写入速度" Style="{StaticResource MetricLabelStyle}"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding DiskWriteText}" Style="{StaticResource MetricValueStyle}"/>
-                                <TextBlock Text="{Binding DiskWriteChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Text="读取速度" Style="{StaticResource MetricLabelStyle}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DiskReadText}" Style="{StaticResource MetricValueStyle}"/>
+                                    <TextBlock Text="{Binding DiskReadChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                <TextBlock Text="写入速度" Style="{StaticResource MetricLabelStyle}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DiskWriteText}" Style="{StaticResource MetricValueStyle}"/>
+                                    <TextBlock Text="{Binding DiskWriteChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
                     </Grid>
 
                     <Border x:Name="DiskChartHost" Grid.Row="2" Margin="0,8,0,0" Height="110"/>
@@ -180,20 +188,25 @@
 
                     <TextBlock Text="内存" Style="{StaticResource SectionTitleStyle}"/>
 
-                    <StackPanel Grid.Row="1">
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="使用量" FontSize="11" Opacity="0.5"/>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                                <TextBlock Text="{Binding MemoryText}" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding MemoryChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Text="使用量" Style="{StaticResource MetricLabelStyle}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding MemoryText}" Style="{StaticResource MetricValueStyle}"/>
+                                <TextBlock Text="{Binding MemoryChartPeakText}" FontSize="11" Opacity="0.65" Margin="12,0,0,2" VerticalAlignment="Bottom"/>
                             </StackPanel>
-                        </Grid>
-                    </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                            <TextBlock Text="分页交换写入量" Style="{StaticResource MetricLabelStyle}"/>
+                            <TextBlock Text="{Binding MemoryPagingWriteWindowTotalMbText}" Style="{StaticResource MetricValueStyle}"/>
+                        </StackPanel>
+                    </Grid>
 
                     <Border x:Name="MemoryChartHost" Grid.Row="2" Margin="0,8,0,0" Height="110"/>
                 </Grid>

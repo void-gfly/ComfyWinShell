@@ -9,6 +9,7 @@ namespace WpfDesktop.ViewModels;
 internal static class PeakChartLabels
 {
     public const string Empty = "峰值: —";
+    public const string EmptyTotal = "累计: —";
 
     public static string FormatPercentPeak(ObservableCollection<DateTimePoint> points)
     {
@@ -47,6 +48,12 @@ internal static class PeakChartLabels
         return max.HasValue ? $"峰值: {max.Value:F1} MB/s" : Empty;
     }
 
+    public static string FormatMegabytesTotal(ObservableCollection<DateTimePoint> points)
+    {
+        var total = LastHistoryValue(points);
+        return total.HasValue ? $"累计: {total.Value:F2} MB" : EmptyTotal;
+    }
+
     private static double? MaxHistoryValue(ObservableCollection<DateTimePoint> points)
     {
         double? max = null;
@@ -65,5 +72,19 @@ internal static class PeakChartLabels
         }
 
         return max;
+    }
+
+    private static double? LastHistoryValue(ObservableCollection<DateTimePoint> points)
+    {
+        for (var i = points.Count - 1; i >= 0; i--)
+        {
+            var value = points[i].Value;
+            if (value.HasValue)
+            {
+                return value.Value;
+            }
+        }
+
+        return null;
     }
 }

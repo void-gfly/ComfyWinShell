@@ -96,6 +96,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     public ObservableCollection<DateTimePoint> MemoryHistoryPoints { get; } = new();
     public ObservableCollection<DateTimePoint> DiskReadHistoryPoints { get; } = new();
     public ObservableCollection<DateTimePoint> DiskWriteHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> DiskPagingWriteRateHistoryPoints { get; } = new();
+    public ObservableCollection<DateTimePoint> DiskPagingWriteTotalHistoryPoints { get; } = new();
 
     public ObservableCollection<ISeries> CpuChartSeries { get; }
     public ObservableCollection<ISeries> MemoryChartSeries { get; }
@@ -114,7 +116,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
         ChartXAxes = HardwareMonitorChartFactory.CreateTimeXAxes();
         ChartYAxes = HardwareMonitorChartFactory.CreatePercentYAxes();
-        DiskChartYAxes = HardwareMonitorChartFactory.CreateSpeedYAxes();
+        DiskChartYAxes = HardwareMonitorChartFactory.CreateDiskYAxes();
         NetworkChartYAxes = HardwareMonitorChartFactory.CreateSpeedYAxes("MB/s", 500);
 
         CpuChartSeries = new ObservableCollection<ISeries>
@@ -128,7 +130,8 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         DiskChartSeries = new ObservableCollection<ISeries>
         {
             HardwareMonitorChartFactory.CreateLineSeries("读取", DiskReadHistoryPoints, new SKColor(0x00, 0xBC, 0xD4), " MB/s"),
-            HardwareMonitorChartFactory.CreateLineSeries("写入", DiskWriteHistoryPoints, new SKColor(0xFF, 0x57, 0x22), " MB/s")
+            HardwareMonitorChartFactory.CreateLineSeries("写入", DiskWriteHistoryPoints, new SKColor(0xFF, 0x57, 0x22), " MB/s"),
+            HardwareMonitorChartFactory.CreateLineSeries("分页交换写入量", DiskPagingWriteTotalHistoryPoints, new SKColor(0x8E, 0x24, 0xAA), " 页", 1)
         };
         NetworkChartSeries = new ObservableCollection<ISeries>
         {
@@ -176,6 +179,9 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private double? _diskWriteRate;
+
+    [ObservableProperty]
+    private string _memoryPagingWriteWindowTotalMbText = PeakChartLabels.EmptyTotal;
 
     [ObservableProperty]
     private double? _networkDownloadRate;
@@ -299,6 +305,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
         AppendPoint(DiskReadHistoryPoints, snapshot.DiskReadRateMb, now);
         AppendPoint(DiskWriteHistoryPoints, snapshot.DiskWriteRateMb, now);
+        AppendPoint(DiskPagingWriteRateHistoryPoints, snapshot.MemoryPagesOutputPerSec, now);
 
         AppendPoint(NetworkDownloadHistoryPoints, snapshot.NetworkDownloadRateMb, now);
         AppendPoint(NetworkUploadHistoryPoints, snapshot.NetworkUploadRateMb, now);
@@ -319,6 +326,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         TrimWindow(MemoryHistoryPoints, now);
         TrimWindow(DiskReadHistoryPoints, now);
         TrimWindow(DiskWriteHistoryPoints, now);
+        TrimWindow(DiskPagingWriteRateHistoryPoints, now);
         TrimWindow(NetworkDownloadHistoryPoints, now);
         TrimWindow(NetworkUploadHistoryPoints, now);
         foreach (var gpu in Gpus)
@@ -326,6 +334,12 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
             TrimWindow(gpu.LoadHistoryPoints, now);
             TrimWindow(gpu.VramHistoryPoints, now);
         }
+
+        HardwareMonitorHistoryHelper.BuildCumulativePoints(
+            DiskPagingWriteRateHistoryPoints,
+            DiskPagingWriteTotalHistoryPoints,
+            HardwareMonitorChartFactory.SampleIntervalSeconds,
+            Environment.SystemPageSize);
 
         UpdateAxisLimits(now);
         UpdateChartPeakLabels();
@@ -337,6 +351,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         MemoryChartPeakText = PeakChartLabels.FormatMemoryPeakGb(MemoryHistoryPoints, MemoryTotal);
         DiskReadChartPeakText = PeakChartLabels.FormatSpeedPeak(DiskReadHistoryPoints);
         DiskWriteChartPeakText = PeakChartLabels.FormatSpeedPeak(DiskWriteHistoryPoints);
+        MemoryPagingWriteWindowTotalMbText = PeakChartLabels.FormatMegabytesTotal(DiskPagingWriteTotalHistoryPoints);
         NetworkDownloadChartPeakText = PeakChartLabels.FormatSpeedPeak(NetworkDownloadHistoryPoints);
         NetworkUploadChartPeakText = PeakChartLabels.FormatSpeedPeak(NetworkUploadHistoryPoints);
         foreach (var gpu in Gpus)

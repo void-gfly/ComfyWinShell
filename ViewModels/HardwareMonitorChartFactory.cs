@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.Kernel.Sketches;
+using LiveChartsCore.Measure;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
@@ -23,12 +24,14 @@ internal static class HardwareMonitorChartFactory
         string name,
         ObservableCollection<DateTimePoint> values,
         SKColor stroke,
-        string tooltipUnit = "%")
+        string tooltipUnit = "%",
+        int scalesYAt = 0)
     {
         return new LineSeries<DateTimePoint>
         {
             Name = name,
             Values = values,
+            ScalesYAt = scalesYAt,
             GeometrySize = 0,
             Fill = null,
             Stroke = new SolidColorPaint(stroke) { StrokeThickness = 2 },
@@ -80,6 +83,35 @@ internal static class HardwareMonitorChartFactory
                 MinLimit = 0,
                 MaxLimit = maxLimit,
                 Name = name,
+                NamePaint = new SolidColorPaint(AxisLabelColor),
+                LabelsPaint = new SolidColorPaint(AxisLabelColor),
+                SeparatorsPaint = new SolidColorPaint(AxisSeparatorColor) { StrokeThickness = 1 },
+                SubseparatorsPaint = new SolidColorPaint(AxisSeparatorColor.WithAlpha(90)) { StrokeThickness = 0.75f },
+                TicksPaint = new SolidColorPaint(AxisTickColor) { StrokeThickness = 1 }
+            }
+        };
+    }
+
+    public static ObservableCollection<ICartesianAxis> CreateDiskYAxes()
+    {
+        return new ObservableCollection<ICartesianAxis>
+        {
+            new Axis
+            {
+                MinLimit = 0,
+                MaxLimit = 5000,
+                Name = "MB/s",
+                NamePaint = new SolidColorPaint(AxisLabelColor),
+                LabelsPaint = new SolidColorPaint(AxisLabelColor),
+                SeparatorsPaint = new SolidColorPaint(AxisSeparatorColor) { StrokeThickness = 1 },
+                SubseparatorsPaint = new SolidColorPaint(AxisSeparatorColor.WithAlpha(90)) { StrokeThickness = 0.75f },
+                TicksPaint = new SolidColorPaint(AxisTickColor) { StrokeThickness = 1 }
+            },
+            new Axis
+            {
+                Position = AxisPosition.End,
+                MinLimit = 0,
+                Name = "MB",
                 NamePaint = new SolidColorPaint(AxisLabelColor),
                 LabelsPaint = new SolidColorPaint(AxisLabelColor),
                 SeparatorsPaint = new SolidColorPaint(AxisSeparatorColor) { StrokeThickness = 1 },

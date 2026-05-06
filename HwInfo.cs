@@ -36,7 +36,9 @@ namespace WpfDesktop.Services
 
         private System.Diagnostics.PerformanceCounter? _diskReadCounter;
         private System.Diagnostics.PerformanceCounter? _diskWriteCounter;
+        private System.Diagnostics.PerformanceCounter? _memoryPagesOutputCounter;
         private bool _perfCountersInitialized;
+        private bool _memoryPerfCountersInitialized;
 
         private long _lastNetReceivedBytes = -1;
         private long _lastNetSentBytes = -1;
@@ -102,6 +104,7 @@ namespace WpfDesktop.Services
             var (memUsed, memTotal) = SelectMemoryUsage(memorySensors, preferPhysicalMemory: true);
 
             var (diskReadMb, diskWriteMb) = SelectDiskRates(storageSensors);
+            var memoryPagesOutputPerSec = GetMemoryPagesOutputRate();
             var (netDownloadMb, netUploadMb) = GetNetworkRates();
 
             // 收集每个 GPU 的信息
@@ -137,6 +140,7 @@ namespace WpfDesktop.Services
                 MemoryTotalMb = memTotal,
                 DiskReadRateMb = diskReadMb,
                 DiskWriteRateMb = diskWriteMb,
+                MemoryPagesOutputPerSec = memoryPagesOutputPerSec,
                 NetworkDownloadRateMb = netDownloadMb,
                 NetworkUploadRateMb = netUploadMb
             };
@@ -156,6 +160,7 @@ namespace WpfDesktop.Services
 
             _diskReadCounter?.Dispose();
             _diskWriteCounter?.Dispose();
+            _memoryPagesOutputCounter?.Dispose();
 
             _disposed = true;
         }
@@ -321,6 +326,43 @@ namespace WpfDesktop.Services
             }
 
             return (null, null);
+        }
+
+        private double? GetMemoryPagesOutputRate()
+        {
+            if (!_memoryPerfCountersInitialized)
+            {
+                _memoryPerfCountersInitialized = true;
+                try
+                {
+#pragma warning disable CA1416
+                    _memoryPagesOutputCounter = new System.Diagnostics.PerformanceCounter("Memory", "Pages Output/sec", true);
+                    _memoryPagesOutputCounter.NextValue();
+#pragma warning restore CA1416
+                }
+                catch (Exception ex)
+                {
+                    _logService?.LogError("内存分页交换性能计数器初始化失败(非管理员可能引发)", ex);
+                    _memoryPagesOutputCounter?.Dispose();
+                    _memoryPagesOutputCounter = null;
+                }
+            }
+
+            if (_memoryPagesOutputCounter != null)
+            {
+                try
+                {
+#pragma warning disable CA1416
+                    return _memoryPagesOutputCounter.NextValue();
+#pragma warning restore CA1416
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            return null;
         }
 
         private (double? downloadMb, double? uploadMb) GetNetworkRates()
@@ -562,6 +604,7 @@ namespace WpfDesktop.Services
         public double? MemoryTotalMb { get; set; }
         public double? DiskReadRateMb { get; set; }
         public double? DiskWriteRateMb { get; set; }
+        public double? MemoryPagesOutputPerSec { get; set; }
         public double? NetworkUploadRateMb { get; set; }
         public double? NetworkDownloadRateMb { get; set; }
 
