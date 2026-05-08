@@ -74,6 +74,7 @@ public partial class MainViewModel : ViewModelBase
     public string WebUiBaseUrl => $"http://127.0.0.1:{_currentConfiguration?.Network.Port ?? 8188}";
     public string OpenWebPageToolTip => $"在浏览器打开 {WebUiBaseUrl} (ComfyUI WebUI BaseUrl)";
     public string CurrentEndpointText => $"{_currentConfiguration?.Network.Listen ?? "127.0.0.1"}:{_currentConfiguration?.Network.Port ?? 8188}";
+    public string CurrentPortText => (_currentConfiguration?.Network.Port ?? 8188).ToString();
 
     public MainViewModel(
         DashboardViewModel dashboardViewModel,
@@ -215,6 +216,7 @@ public partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(WebUiBaseUrl));
             OnPropertyChanged(nameof(OpenWebPageToolTip));
             OnPropertyChanged(nameof(CurrentEndpointText));
+            OnPropertyChanged(nameof(CurrentPortText));
 
             if (!_startupCleanupCompleted && _comfyPathService.IsValid && !string.IsNullOrWhiteSpace(_comfyPathService.ComfyRootPath))
             {
@@ -405,6 +407,7 @@ public partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(WebUiBaseUrl));
             OnPropertyChanged(nameof(OpenWebPageToolTip));
             OnPropertyChanged(nameof(CurrentEndpointText));
+            OnPropertyChanged(nameof(CurrentPortText));
             RefreshGpuStatusSummary();
         }
         catch (Exception ex)

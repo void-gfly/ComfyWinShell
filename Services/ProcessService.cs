@@ -230,11 +230,12 @@ public class ProcessService : IProcessService, IDisposable
         {
             if (!string.IsNullOrWhiteSpace(e.Data))
             {
+                var line = DecodeUnicodeEscapes(e.Data);
                 lock (_statusLock)
                 {
-                    _status.OutputLogs.Add(e.Data);
+                    _status.OutputLogs.Add(line);
                 }
-                OutputReceived?.Invoke(this, e.Data);
+                OutputReceived?.Invoke(this, line);
             }
         };
 
@@ -242,11 +243,12 @@ public class ProcessService : IProcessService, IDisposable
         {
             if (!string.IsNullOrWhiteSpace(e.Data))
             {
+                var line = DecodeUnicodeEscapes(e.Data);
                 lock (_statusLock)
                 {
-                    _status.OutputLogs.Add(e.Data);
+                    _status.OutputLogs.Add(line);
                 }
-                OutputReceived?.Invoke(this, e.Data);
+                OutputReceived?.Invoke(this, line);
             }
         };
 
@@ -1082,6 +1084,95 @@ public class ProcessService : IProcessService, IDisposable
         startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
         startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
         return startInfo;
+    }
+
+    /// <summary>
+    /// 将进程输出中的 Unicode 转义序列还原为可读文本。
+    /// </summary>
+    /// <param name="text">原始输出。</param>
+    /// <returns>还原后的文本。</returns>
+    private static string DecodeUnicodeEscapes(string text)
+    {
+        if (string.IsNullOrEmpty(text) || (!text.Contains(@"\u", StringComparison.Ordinal) && !text.Contains(@"\U", StringComparison.Ordinal)))
+        {
+            return text;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length)
+            {
+                if (text[i + 1] == 'u' && TryParseHex(text, i + 2, 4, out var codeUnit))
+                {
+                    if (char.IsHighSurrogate((char)codeUnit)
+                        && i + 11 < text.Length
+                        && text[i + 6] == '\\'
+                        && text[i + 7] == 'u'
+                        && TryParseHex(text, i + 8, 4, out var lowCodeUnit)
+                        && char.IsLowSurrogate((char)lowCodeUnit))
+                    {
+                        builder.Append(char.ConvertFromUtf32(char.ConvertToUtf32((char)codeUnit, (char)lowCodeUnit)));
+                        i += 11;
+                        continue;
+                    }
+
+                    if (char.IsSurrogate((char)codeUnit))
+                    {
+                        builder.Append(text, i, 6);
+                        i += 5;
+                        continue;
+                    }
+
+                    builder.Append((char)codeUnit);
+                    i += 5;
+                    continue;
+                }
+
+                if (text[i + 1] == 'U' && TryParseHex(text, i + 2, 8, out var codePoint)
+                    && codePoint is >= 0 and <= 0x10FFFF
+                    && !(codePoint is >= 0xD800 and <= 0xDFFF))
+                {
+                    builder.Append(char.ConvertFromUtf32(codePoint));
+                    i += 9;
+                    continue;
+                }
+            }
+
+            builder.Append(text[i]);
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool TryParseHex(string text, int startIndex, int length, out int value)
+    {
+        value = 0;
+        if (startIndex < 0 || length <= 0 || startIndex + length > text.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < length; i++)
+        {
+            var c = text[startIndex + i];
+            var digit = c switch
+            {
+                >= '0' and <= '9' => c - '0',
+                >= 'a' and <= 'f' => c - 'a' + 10,
+                >= 'A' and <= 'F' => c - 'A' + 10,
+                _ => -1
+            };
+
+            if (digit < 0)
+            {
+                return false;
+            }
+
+            value = (value << 4) | digit;
+        }
+
+        return true;
     }
 
     /// <summary>

@@ -106,6 +106,12 @@
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border CornerRadius="4" Padding="12,6" Background="#2A2A2A" Margin="0,0,15,0">
                             <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding CurrentPortText}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border CornerRadius="4" Padding="12,6" Background="#2A2A2A" Margin="0,0,15,0">
+                            <StackPanel Orientation="Horizontal">
                                 <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
