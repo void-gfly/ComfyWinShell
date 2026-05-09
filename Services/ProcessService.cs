@@ -158,129 +158,132 @@ public class ProcessService : IProcessService, IDisposable
     /// <returns>启动成功时返回 true，否则返回 false。</returns>
     public Task<bool> StartAsync(string comfyRootPath, ComfyConfiguration configuration, CancellationToken cancellationToken = default)
     {
-        if (_process is { HasExited: false })
+        return Task.Run(() =>
         {
-            return Task.FromResult(false);
-        }
+            if (_process is { HasExited: false })
+            {
+                return false;
+            }
 
-        if (string.IsNullOrWhiteSpace(comfyRootPath))
-        {
-            return Task.FromResult(false);
-        }
+            if (string.IsNullOrWhiteSpace(comfyRootPath))
+            {
+                return false;
+            }
 
-        var arguments = _argumentBuilder.BuildArguments(configuration);
-        var startInfo = BuildStartInfo(comfyRootPath, arguments);
-        if (startInfo == null)
-        {
-            OutputReceived?.Invoke(this, "无法启动：未能定位 Python 或 main.py，请在仪表盘确认 ComfyUI 路径与 Python 环境。");
-            return Task.FromResult(false);
-        }
+            var arguments = _argumentBuilder.BuildArguments(configuration);
+            var startInfo = BuildStartInfo(comfyRootPath, arguments);
+            if (startInfo == null)
+            {
+                OutputReceived?.Invoke(this, "无法启动：未能定位 Python 或 main.py，请在仪表盘确认 ComfyUI 路径与 Python 环境。");
+                return false;
+            }
 
-        ConfigureApiEndpoint(configuration.Network.Listen, configuration.Network.Port);
-        _stopRequestedByUser = false;
-        _recoveryDeadlineUtc = null;
+            ConfigureApiEndpoint(configuration.Network.Listen, configuration.Network.Port);
+            _stopRequestedByUser = false;
+            _recoveryDeadlineUtc = null;
 
-        var existingProcess = FindExistingComfyProcess(_lastPythonPath!, _lastMainPath!);
-        if (existingProcess != null)
-        {
-            OutputReceived?.Invoke(this, $"[ProcessService] 检测到同副本已在运行(PID={existingProcess.Id})，跳过重复启动，转入连接检测。");
-            _process = existingProcess;
-            _process.EnableRaisingEvents = true;
-            _process.Exited -= OnProcessExited;
+            var existingProcess = FindExistingComfyProcess(_lastPythonPath!, _lastMainPath!);
+            if (existingProcess != null)
+            {
+                OutputReceived?.Invoke(this, $"[ProcessService] 检测到同副本已在运行(PID={existingProcess.Id})，跳过重复启动，转入连接检测。");
+                _process = existingProcess;
+                _process.EnableRaisingEvents = true;
+                _process.Exited -= OnProcessExited;
+                _process.Exited += OnProcessExited;
+
+                lock (_statusLock)
+                {
+                    _status = new ProcessStatus
+                    {
+                        VersionId = "local",
+                        State = ProcessState.Starting,
+                        IsRunning = true,
+                        ProcessId = existingProcess.Id,
+                        StartTime = DateTime.Now
+                    };
+                }
+
+                StatusChanged?.Invoke(this, CreateStatusSnapshot());
+                StartHeartbeat();
+                StartWebSocketMonitor();
+                return true;
+            }
+
+            var fullCommand = string.IsNullOrWhiteSpace(startInfo.Arguments)
+                ? $"\"{startInfo.FileName}\""
+                : $"\"{startInfo.FileName}\" {startInfo.Arguments}";
+            OutputReceived?.Invoke(this, $"启动命令：{fullCommand}");
+
+            _status = new ProcessStatus
+            {
+                VersionId = "local",
+                State = ProcessState.Starting,
+                IsRunning = true
+            };
+            StatusChanged?.Invoke(this, CreateStatusSnapshot());
+
+            _process = new Process
+            {
+                StartInfo = startInfo,
+                EnableRaisingEvents = true
+            };
+
+            _process.OutputDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                {
+                    var line = DecodeUnicodeEscapes(e.Data);
+                    lock (_statusLock)
+                    {
+                        _status.OutputLogs.Add(line);
+                    }
+                    OutputReceived?.Invoke(this, line);
+                }
+            };
+
+            _process.ErrorDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                {
+                    var line = DecodeUnicodeEscapes(e.Data);
+                    lock (_statusLock)
+                    {
+                        _status.OutputLogs.Add(line);
+                    }
+                    OutputReceived?.Invoke(this, line);
+                }
+            };
+
             _process.Exited += OnProcessExited;
 
-            lock (_statusLock)
+            var started = _process.Start();
+            if (started)
             {
-                _status = new ProcessStatus
-                {
-                    VersionId = "local",
-                    State = ProcessState.Starting,
-                    IsRunning = true,
-                    ProcessId = existingProcess.Id,
-                    StartTime = DateTime.Now
-                };
-            }
-
-            StatusChanged?.Invoke(this, CreateStatusSnapshot());
-            StartHeartbeat();
-            StartWebSocketMonitor();
-            return Task.FromResult(true);
-        }
-
-        var fullCommand = string.IsNullOrWhiteSpace(startInfo.Arguments)
-            ? $"\"{startInfo.FileName}\""
-            : $"\"{startInfo.FileName}\" {startInfo.Arguments}";
-        OutputReceived?.Invoke(this, $"启动命令：{fullCommand}");
-
-        _status = new ProcessStatus
-        {
-            VersionId = "local",
-            State = ProcessState.Starting,
-            IsRunning = true
-        };
-        StatusChanged?.Invoke(this, CreateStatusSnapshot());
-
-        _process = new Process
-        {
-            StartInfo = startInfo,
-            EnableRaisingEvents = true
-        };
-
-        _process.OutputDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-            {
-                var line = DecodeUnicodeEscapes(e.Data);
+                _process.BeginOutputReadLine();
+                _process.BeginErrorReadLine();
                 lock (_statusLock)
                 {
-                    _status.OutputLogs.Add(line);
+                    _status.State = ProcessState.Running;
+                    _status.StartTime = DateTime.Now;
+                    _status.ProcessId = _process.Id;
+                    _status.IsRunning = true;
                 }
-                OutputReceived?.Invoke(this, line);
+                StatusChanged?.Invoke(this, CreateStatusSnapshot());
+                StartHeartbeat();
+                StartWebSocketMonitor();
             }
-        };
-
-        _process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
+            else
             {
-                var line = DecodeUnicodeEscapes(e.Data);
                 lock (_statusLock)
                 {
-                    _status.OutputLogs.Add(line);
+                    _status.State = ProcessState.Error;
+                    _status.IsRunning = false;
                 }
-                OutputReceived?.Invoke(this, line);
+                StatusChanged?.Invoke(this, CreateStatusSnapshot());
             }
-        };
 
-        _process.Exited += OnProcessExited;
-
-        var started = _process.Start();
-        if (started)
-        {
-            _process.BeginOutputReadLine();
-            _process.BeginErrorReadLine();
-            lock (_statusLock)
-            {
-                _status.State = ProcessState.Running;
-                _status.StartTime = DateTime.Now;
-                _status.ProcessId = _process.Id;
-                _status.IsRunning = true;
-            }
-            StatusChanged?.Invoke(this, CreateStatusSnapshot());
-            StartHeartbeat();
-            StartWebSocketMonitor();
-        }
-        else
-        {
-            lock (_statusLock)
-            {
-                _status.State = ProcessState.Error;
-                _status.IsRunning = false;
-            }
-            StatusChanged?.Invoke(this, CreateStatusSnapshot());
-        }
-
-        return Task.FromResult(started);
+            return started;
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -316,24 +319,27 @@ public class ProcessService : IProcessService, IDisposable
     /// <returns>发送停止或完成清理时返回 true，否则返回 false。</returns>
     public Task<bool> StopAsync(CancellationToken cancellationToken = default)
     {
-        _stopRequestedByUser = true;
-        _recoveryDeadlineUtc = null;
-
-        if (_process == null || _process.HasExited)
+        return Task.Run(() =>
         {
-            var killed = TryKillLingeringComfyPythonProcesses();
-            MarkStopped(killed ? "检测到残留进程并已清理" : "已停止");
-            return Task.FromResult(killed);
-        }
+            _stopRequestedByUser = true;
+            _recoveryDeadlineUtc = null;
 
-        lock (_statusLock)
-        {
-            _status.State = ProcessState.Stopping;
-            _status.IsRunning = true;
-        }
-        StatusChanged?.Invoke(this, CreateStatusSnapshot());
-        _process.Kill();
-        return Task.FromResult(true);
+            if (_process == null || _process.HasExited)
+            {
+                var killed = TryKillLingeringComfyPythonProcesses();
+                MarkStopped(killed ? "检测到残留进程并已清理" : "已停止");
+                return killed;
+            }
+
+            lock (_statusLock)
+            {
+                _status.State = ProcessState.Stopping;
+                _status.IsRunning = true;
+            }
+            StatusChanged?.Invoke(this, CreateStatusSnapshot());
+            _process.Kill();
+            return true;
+        }, cancellationToken);
     }
 
     /// <summary>

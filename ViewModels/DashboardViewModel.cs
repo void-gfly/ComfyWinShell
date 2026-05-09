@@ -80,7 +80,7 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
             ActiveVersionPath = _comfyPathService.ComfyUiPath ?? "未设置";
 
             var rootPath = _comfyPathService.ComfyRootPath!;
-            _pythonPathService.Resolve(rootPath);
+            await Task.Run(() => _pythonPathService.Resolve(rootPath));
 
             if (!string.IsNullOrEmpty(_pythonPathService.PythonPath))
             {
@@ -121,7 +121,7 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
         var arguments = _argumentBuilder.BuildArguments(configuration);
 
         // 构建完整命令行
-        _pythonPathService.Resolve(rootPath);
+        await Task.Run(() => _pythonPathService.Resolve(rootPath));
         var pythonPath = _pythonPathService.PythonPath;
         var mainPath = ResolveMainPath(rootPath);
 
@@ -197,7 +197,7 @@ public partial class DashboardViewModel : ViewModelBase, INavigationAware
         try
         {
             _appSettings.PythonRoot = selected;
-            SaveAppSettings(_appSettings);
+            await Task.Run(() => SaveAppSettings(_appSettings));
             await RefreshAsync();
         }
         catch (Exception ex)

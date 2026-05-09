@@ -548,7 +548,7 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     {
         var pythonExe = ResolveStartupPythonExecutable(pythonPath, comfyRootPath);
         var comfyGitPath = ResolveComfyGitDirectory(comfyRootPath);
-        var (cpuInfo, cpuMemoryInfo, gpuInfoFromHw, gpuMemoryInfo) = GetHardwareInfoFromHwModule();
+        var (cpuInfo, cpuMemoryInfo, gpuInfoFromHw, gpuMemoryInfo) = await GetHardwareInfoFromHwModuleAsync(cancellationToken);
 
         // 并行执行所有外部命令
         var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
@@ -597,9 +597,10 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// 从硬件监控模块提取 CPU、内存与 GPU 摘要信息。
     /// </summary>
     /// <returns>CPU 信息、内存占用、GPU 信息和显存占用组成的元组。</returns>
-    private (string cpuInfo, string cpuMemoryInfo, string gpuInfo, string gpuMemoryInfo) GetHardwareInfoFromHwModule()
+    private async Task<(string cpuInfo, string cpuMemoryInfo, string gpuInfo, string gpuMemoryInfo)> GetHardwareInfoFromHwModuleAsync(
+        CancellationToken cancellationToken)
     {
-        var snapshot = _hardwareMonitorService.GetSnapshot();
+        var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot(), cancellationToken);
 
         var cpuInfo = string.IsNullOrWhiteSpace(snapshot.CpuName) ? "未知 CPU" : snapshot.CpuName;
         var cpuMemoryInfo = FormatUsage(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);

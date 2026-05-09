@@ -9,6 +9,7 @@ using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Windows.Threading;
 
 namespace WpfDesktop.ViewModels;
@@ -27,6 +28,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IHardwareMonitorService _hardwareMonitorService;
     private readonly IEnvironmentCheckService _environmentCheckService;
     private readonly DispatcherTimer _gpuStatusTimer;
+    private int _gpuStatusRefreshInProgress;
 
     private string _activeProfileId = DefaultProfileId;
     private ComfyConfiguration? _currentConfiguration;
@@ -139,7 +141,7 @@ public partial class MainViewModel : ViewModelBase
             RunOnUiThread(() =>
             {
                 UpdateAppTitle(message.Value);
-                RefreshGpuStatusSummary();
+                _ = RefreshGpuStatusSummaryAsync();
             });
         });
 
@@ -155,11 +157,11 @@ public partial class MainViewModel : ViewModelBase
         {
             Interval = TimeSpan.FromSeconds(2)
         };
-        _gpuStatusTimer.Tick += (_, _) => RefreshGpuStatusSummary();
+        _gpuStatusTimer.Tick += (_, _) => _ = RefreshGpuStatusSummaryAsync();
         _gpuStatusTimer.Start();
 
         _ = LoadAppTitleAsync();
-        RefreshGpuStatusSummary();
+        _ = RefreshGpuStatusSummaryAsync();
 
         // 初始化状态
         _ = RefreshAsync();
@@ -239,7 +241,7 @@ public partial class MainViewModel : ViewModelBase
             UpdateStatus(status);
 
             LastUpdated = DateTime.Now;
-            RefreshGpuStatusSummary();
+            await RefreshGpuStatusSummaryAsync();
         }
         finally
         {
@@ -384,7 +386,7 @@ public partial class MainViewModel : ViewModelBase
         RunOnUiThread(() =>
         {
             UpdateAppTitle(settings);
-            RefreshGpuStatusSummary();
+            _ = RefreshGpuStatusSummaryAsync();
         });
     }
 
@@ -408,7 +410,7 @@ public partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(OpenWebPageToolTip));
             OnPropertyChanged(nameof(CurrentEndpointText));
             OnPropertyChanged(nameof(CurrentPortText));
-            RefreshGpuStatusSummary();
+            await RefreshGpuStatusSummaryAsync();
         }
         catch (Exception ex)
         {
@@ -568,11 +570,16 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private void RefreshGpuStatusSummary()
+    private async Task RefreshGpuStatusSummaryAsync()
     {
+        if (Interlocked.Exchange(ref _gpuStatusRefreshInProgress, 1) == 1)
+        {
+            return;
+        }
+
         try
         {
-            var snapshot = _hardwareMonitorService.GetSnapshot();
+            var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot());
             var settings = _settingsService.Current;
             var cpuPercent = snapshot.CpuLoadPercent.HasValue ? Math.Clamp(snapshot.CpuLoadPercent.Value, 0, 100) : 0;
             var cpuMemoryPercent = ResolveMemoryPercent(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);
@@ -653,6 +660,10 @@ public partial class MainViewModel : ViewModelBase
             CpuStatusItem.MemoryArcData = string.Empty;
             CpuStatusItem.MemoryTooltipValue = "--";
             GpuStatusItems.Clear();
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _gpuStatusRefreshInProgress, 0);
         }
     }
 

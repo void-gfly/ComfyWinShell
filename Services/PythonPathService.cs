@@ -12,6 +12,7 @@ public class PythonPathService : IPythonPathService
 {
     private readonly AppSettings _appSettings;
     private readonly ILogService _logService;
+    private readonly object _syncRoot = new();
     private string? _pythonPath;
 
     /// <summary>
@@ -35,28 +36,31 @@ public class PythonPathService : IPythonPathService
     /// <param name="comfyRootPath">ComfyUI 根目录。</param>
     public void Resolve(string comfyRootPath)
     {
-        // 1. 先检查配置中的 PythonRoot
-        if (!string.IsNullOrWhiteSpace(_appSettings.PythonRoot))
+        lock (_syncRoot)
         {
-            var configuredPath = Path.Combine(_appSettings.PythonRoot, "python.exe");
-            if (File.Exists(configuredPath))
+            // 1. 先检查配置中的 PythonRoot
+            if (!string.IsNullOrWhiteSpace(_appSettings.PythonRoot))
             {
-                _pythonPath = configuredPath;
-                return;
+                var configuredPath = Path.Combine(_appSettings.PythonRoot, "python.exe");
+                if (File.Exists(configuredPath))
+                {
+                    _pythonPath = configuredPath;
+                    return;
+                }
             }
-        }
 
-        // 2. 搜索 Python
-        _pythonPath = SearchPython(comfyRootPath);
+            // 2. 搜索 Python
+            _pythonPath = SearchPython(comfyRootPath);
 
-        // 3. 如果找到了，保存到配置
-        if (!string.IsNullOrWhiteSpace(_pythonPath) && File.Exists(_pythonPath))
-        {
-            var pythonRoot = Path.GetDirectoryName(_pythonPath);
-            if (!string.IsNullOrWhiteSpace(pythonRoot))
+            // 3. 如果找到了，保存到配置
+            if (!string.IsNullOrWhiteSpace(_pythonPath) && File.Exists(_pythonPath))
             {
-                _appSettings.PythonRoot = pythonRoot;
-                SaveSettings();
+                var pythonRoot = Path.GetDirectoryName(_pythonPath);
+                if (!string.IsNullOrWhiteSpace(pythonRoot))
+                {
+                    _appSettings.PythonRoot = pythonRoot;
+                    SaveSettings();
+                }
             }
         }
     }

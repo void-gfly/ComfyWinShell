@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Threading;
 using WpfDesktop.Models;
 using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
@@ -30,6 +31,37 @@ public sealed class ProcessServiceTests
         Assert.Equal(expectedWsUrl, GetPrivateField<string>(service, "_comfyWsUrl"));
     }
 
+    [Fact]
+    public async Task StartAsync_ReturnsTaskBeforePythonResolutionCompletes()
+    {
+        using var tempRoot = new TempComfyRoot();
+        using var resolveEntered = new ManualResetEventSlim(false);
+        using var releaseResolve = new ManualResetEventSlim(false);
+
+        var pythonPathService = new BlockingPythonPathService(resolveEntered, releaseResolve);
+        using var service = new ProcessService(
+            new ArgumentBuilder(),
+            pythonPathService,
+            new FakeProxyService(),
+            new FakeLogService());
+
+        var startTask = Task.Factory.StartNew(
+            () => service.StartAsync(tempRoot.RootPath, new ComfyConfiguration()),
+            CancellationToken.None,
+            TaskCreationOptions.None,
+            TaskScheduler.Default);
+
+        Assert.True(resolveEntered.Wait(TimeSpan.FromSeconds(1)));
+        Assert.Same(startTask, await Task.WhenAny(startTask, Task.Delay(TimeSpan.FromMilliseconds(200))));
+
+        releaseResolve.Set();
+
+        var innerTask = await startTask;
+        var started = await innerTask;
+
+        Assert.False(started);
+    }
+
     private static T GetPrivateField<T>(object instance, string fieldName)
     {
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -45,6 +77,47 @@ public sealed class ProcessServiceTests
 
         public void Resolve(string comfyRootPath)
         {
+        }
+    }
+
+    private sealed class BlockingPythonPathService : IPythonPathService
+    {
+        private readonly ManualResetEventSlim _resolveEntered;
+        private readonly ManualResetEventSlim _releaseResolve;
+
+        public BlockingPythonPathService(ManualResetEventSlim resolveEntered, ManualResetEventSlim releaseResolve)
+        {
+            _resolveEntered = resolveEntered;
+            _releaseResolve = releaseResolve;
+        }
+
+        public string? PythonPath => Path.Combine(Path.GetTempPath(), "python.exe");
+
+        public bool IsValid => true;
+
+        public void Resolve(string comfyRootPath)
+        {
+            _resolveEntered.Set();
+            _releaseResolve.Wait(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    private sealed class TempComfyRoot : IDisposable
+    {
+        public string RootPath { get; }
+
+        public TempComfyRoot()
+        {
+            RootPath = Path.Combine(Path.GetTempPath(), "WpfDesktopTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(RootPath);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(RootPath))
+            {
+                Directory.Delete(RootPath, recursive: true);
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Threading;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -91,6 +92,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
     private readonly ILogService _logService;
     private readonly DispatcherTimer _timer;
     private bool _disposed;
+    private int _refreshInProgress;
 
     public ObservableCollection<DateTimePoint> CpuLoadHistoryPoints { get; } = new();
     public ObservableCollection<DateTimePoint> MemoryHistoryPoints { get; } = new();
@@ -145,10 +147,10 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         {
             Interval = TimeSpan.FromSeconds(HardwareMonitorChartFactory.SampleIntervalSeconds)
         };
-        _timer.Tick += (_, _) => Refresh();
+        _timer.Tick += (_, _) => _ = RefreshAsync();
         _timer.Start();
 
-        Refresh();
+        _ = RefreshAsync();
     }
 
     [ObservableProperty]
@@ -243,7 +245,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         if (value)
         {
             _timer.Start();
-            Refresh();
+            _ = RefreshAsync();
         }
         else
         {
@@ -253,9 +255,19 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
     private void Refresh()
     {
+        _ = RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (Interlocked.Exchange(ref _refreshInProgress, 1) == 1)
+        {
+            return;
+        }
+
         try
         {
-            var snapshot = _hardwareMonitorService.GetSnapshot();
+            var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot());
 
             CpuName = snapshot.CpuName;
             CpuLoad = snapshot.CpuLoadPercent;
@@ -289,6 +301,10 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             _logService.LogError("刷新硬件监控数据失败", ex);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _refreshInProgress, 0);
         }
     }
 

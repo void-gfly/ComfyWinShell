@@ -56,7 +56,6 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         Configuration = new ComfyConfiguration();
         AttachConfigurationHandlers(Configuration);
 
-        RefreshCudaDevices();
         _ = LoadDefaultAsync();
     }
 
@@ -163,7 +162,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
             AttachConfigurationHandlers(Configuration);
 
             // 同步选中的 CUDA 设备
-            SyncSelectedCudaDevice();
+            await RefreshCudaDevicesAsync();
         }
         finally
         {
@@ -361,14 +360,14 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     /// <summary>
     /// 刷新 CUDA 设备列表
     /// </summary>
-    private void RefreshCudaDevices()
+    private async Task RefreshCudaDevicesAsync()
     {
-        CudaDevices.Clear();
-        CudaDevices.Add(CudaDeviceOption.None);
-
         try
         {
-            var snapshot = _hardwareMonitorService.GetSnapshot();
+            var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot());
+            CudaDevices.Clear();
+            CudaDevices.Add(CudaDeviceOption.None);
+
             // 只添加 NVIDIA GPU（CUDA 设备）
             var nvidiaGpus = snapshot.Gpus
                 .Where(g => g.Name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
@@ -378,6 +377,8 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
             {
                 CudaDevices.Add(CudaDeviceOption.Create(i, nvidiaGpus[i].Name));
             }
+
+            SyncSelectedCudaDevice();
         }
         catch (Exception ex)
         {

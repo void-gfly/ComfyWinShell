@@ -216,7 +216,7 @@ public partial class VersionManagerViewModel : ViewModelBase
         }
 
         // 解析 Python 路径
-        _pythonPathService.Resolve(_comfyPathService.ComfyRootPath!);
+        await Task.Run(() => _pythonPathService.Resolve(_comfyPathService.ComfyRootPath!));
         if (!_pythonPathService.IsValid)
         {
             _logService.Log("[版本管理] 未找到 Python，跳过依赖更新");
