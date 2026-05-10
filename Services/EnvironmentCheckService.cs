@@ -472,19 +472,23 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         int timeoutSeconds = 30)
     {
         var output = new StringBuilder();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = command,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        ApplyPythonUtf8Environment(startInfo, command);
+
         var process = new Process
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = command,
-                Arguments = arguments,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            }
+            StartInfo = startInfo
         };
 
         process.OutputDataReceived += (s, e) =>
@@ -536,6 +540,19 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
         {
             process.Dispose();
         }
+    }
+
+    internal static void ApplyPythonUtf8Environment(ProcessStartInfo startInfo, string command)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(command);
+        if (string.IsNullOrWhiteSpace(fileName) ||
+            !fileName.StartsWith("python", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+        startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
     }
 
     /// <summary>
