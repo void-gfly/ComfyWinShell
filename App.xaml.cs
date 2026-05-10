@@ -262,20 +262,64 @@ namespace WpfDesktop
             AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             {
                 var ex = args.ExceptionObject as Exception;
-                HandleFatalException(ex, "未处理异常(AppDomain)");
+                HandleGlobalException(ex, "未处理异常(AppDomain)");
             };
 
             DispatcherUnhandledException += (_, args) =>
             {
+                if (HandleRecoverableGlobalException(args.Exception, "未处理异常(UI线程)"))
+                {
+                    args.Handled = true;
+                    return;
+                }
+
                 args.Handled = true;
                 HandleFatalException(args.Exception, "未处理异常(UI线程)");
             };
 
             TaskScheduler.UnobservedTaskException += (_, args) =>
             {
+                if (HandleRecoverableGlobalException(args.Exception, "未观察到的任务异常"))
+                {
+                    args.SetObserved();
+                    return;
+                }
+
                 args.SetObserved();
                 HandleFatalException(args.Exception, "未观察到的任务异常");
             };
+        }
+
+        private void HandleGlobalException(Exception? exception, string source)
+        {
+            if (HandleRecoverableGlobalException(exception, source))
+            {
+                return;
+            }
+
+            HandleFatalException(exception, source);
+        }
+
+        private bool HandleRecoverableGlobalException(Exception? exception, string source)
+        {
+            if (!GlobalExceptionPolicy.IsRecoverableNetworkException(exception))
+            {
+                return false;
+            }
+
+            try
+            {
+                var summary = exception == null
+                    ? source
+                    : $"{source}: {exception.GetType().Name} - {exception.Message}";
+                _logService?.Log(summary, GUILogLevel.Warning);
+            }
+            catch
+            {
+                // 日志失败不阻塞异常收口
+            }
+
+            return true;
         }
 
         private void HandleFatalException(Exception? exception, string source)

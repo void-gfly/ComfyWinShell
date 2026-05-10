@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.ViewModels;
@@ -9,14 +10,16 @@ namespace WpfDesktop.ViewModels;
 public partial class SettingsViewModel : ViewModelBase
 {
     private readonly ISettingsService _settingsService;
+    private readonly ILogService _logService;
 
-    public SettingsViewModel(ISettingsService settingsService)
+    public SettingsViewModel(ISettingsService settingsService, ILogService logService)
     {
         _settingsService = settingsService;
+        _logService = logService;
 
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsLoading);
 
-        _ = LoadAsync();
+        BackgroundTaskObserver.Observe(LoadAsync(), _logService, "加载设置");
     }
 
     [ObservableProperty]

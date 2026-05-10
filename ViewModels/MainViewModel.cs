@@ -121,7 +121,7 @@ public partial class MainViewModel : ViewModelBase
         CurrentView = initialView;
         if (initialView is INavigationAware navigationAware)
         {
-            _ = navigationAware.OnNavigatedToAsync();
+            BackgroundTaskObserver.Observe(navigationAware.OnNavigatedToAsync(), _logService, "首页初始导航");
         }
 
         NavigateCommand = new RelayCommand<string>(NavigateTo);
@@ -141,7 +141,7 @@ public partial class MainViewModel : ViewModelBase
             RunOnUiThread(() =>
             {
                 UpdateAppTitle(message.Value);
-                _ = RefreshGpuStatusSummaryAsync();
+                BackgroundTaskObserver.Observe(RefreshGpuStatusSummaryAsync(), _logService, "应用设置变更后刷新显卡状态");
             });
         });
 
@@ -149,7 +149,7 @@ public partial class MainViewModel : ViewModelBase
         {
             RunOnUiThread(() =>
             {
-                _ = ReloadCurrentConfigurationAsync(message.Value);
+                BackgroundTaskObserver.Observe(ReloadCurrentConfigurationAsync(message.Value), _logService, "配置变更后刷新当前配置");
             });
         });
 
@@ -157,14 +157,14 @@ public partial class MainViewModel : ViewModelBase
         {
             Interval = TimeSpan.FromSeconds(2)
         };
-        _gpuStatusTimer.Tick += (_, _) => _ = RefreshGpuStatusSummaryAsync();
+        _gpuStatusTimer.Tick += (_, _) => BackgroundTaskObserver.Observe(RefreshGpuStatusSummaryAsync(), _logService, "顶部显卡状态定时刷新");
         _gpuStatusTimer.Start();
 
-        _ = LoadAppTitleAsync();
-        _ = RefreshGpuStatusSummaryAsync();
+        BackgroundTaskObserver.Observe(LoadAppTitleAsync(), _logService, "加载应用标题");
+        BackgroundTaskObserver.Observe(RefreshGpuStatusSummaryAsync(), _logService, "初始化顶部显卡状态");
 
         // 初始化状态
-        _ = RefreshAsync();
+        BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "初始化首页状态");
     }
 
     private object? _currentView;
@@ -179,19 +179,26 @@ public partial class MainViewModel : ViewModelBase
 
     private async void NavigateTo(string? key)
     {
-        if (string.IsNullOrWhiteSpace(key))
+        try
         {
-            return;
-        }
-
-        if (_viewModels.TryGetValue(key, out var viewModel))
-        {
-            CurrentView = viewModel;
-
-            if (viewModel is INavigationAware navigationAware)
+            if (string.IsNullOrWhiteSpace(key))
             {
-                await navigationAware.OnNavigatedToAsync();
+                return;
             }
+
+            if (_viewModels.TryGetValue(key, out var viewModel))
+            {
+                CurrentView = viewModel;
+
+                if (viewModel is INavigationAware navigationAware)
+                {
+                    await navigationAware.OnNavigatedToAsync();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError($"导航到 {key} 失败", ex);
         }
     }
 
@@ -205,9 +212,10 @@ public partial class MainViewModel : ViewModelBase
             if (!_startupBannerLogged)
             {
                 _startupBannerLogged = true;
-                _ = _environmentCheckService.LogStartupBannerAsync(
-                    null,
-                    _comfyPathService.ComfyRootPath);
+                BackgroundTaskObserver.Observe(
+                    _environmentCheckService.LogStartupBannerAsync(null, _comfyPathService.ComfyRootPath),
+                    _logService,
+                    "输出启动环境横幅");
             }
 
             var profiles = await _profileService.GetProfilesAsync();
@@ -386,7 +394,7 @@ public partial class MainViewModel : ViewModelBase
         RunOnUiThread(() =>
         {
             UpdateAppTitle(settings);
-            _ = RefreshGpuStatusSummaryAsync();
+            BackgroundTaskObserver.Observe(RefreshGpuStatusSummaryAsync(), _logService, "加载应用标题后刷新显卡状态");
         });
     }
 

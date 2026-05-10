@@ -512,17 +512,24 @@ public class ProcessService : IProcessService, IDisposable
             return;
         }
 
-        var httpAlive = await CheckHeartbeatAsync();
-        var wsAlive = IsWebSocketAlive();
-        var combinedAlive = httpAlive || wsAlive;
-
-        if (combinedAlive != _lastHeartbeatSuccess)
+        try
         {
-            _lastHeartbeatSuccess = combinedAlive;
-            HeartbeatStatusChanged?.Invoke(this, combinedAlive);
-        }
+            var httpAlive = await CheckHeartbeatAsync();
+            var wsAlive = IsWebSocketAlive();
+            var combinedAlive = httpAlive || wsAlive;
 
-        EvaluateLiveness(httpAlive, wsAlive);
+            if (combinedAlive != _lastHeartbeatSuccess)
+            {
+                _lastHeartbeatSuccess = combinedAlive;
+                HeartbeatStatusChanged?.Invoke(this, combinedAlive);
+            }
+
+            EvaluateLiveness(httpAlive, wsAlive);
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("HTTP 心跳定时器异常", ex);
+        }
     }
 
     /// <summary>
@@ -669,7 +676,8 @@ public class ProcessService : IProcessService, IDisposable
         _webSocketWaitingForServerNotified = false;
         _webSocketDisconnectedNotified = false;
         _webSocketCts = new CancellationTokenSource();
-        _webSocketMonitorTask = Task.Run(() => MonitorWebSocketLoopAsync(_webSocketCts.Token));
+        _webSocketMonitorTask = MonitorWebSocketLoopAsync(_webSocketCts.Token);
+        BackgroundTaskObserver.Observe(_webSocketMonitorTask, _logService, "WebSocket 监控循环");
     }
 
     /// <summary>

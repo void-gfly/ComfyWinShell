@@ -3,6 +3,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.ViewModels;
@@ -11,11 +12,13 @@ public partial class ProfileManagerViewModel : ViewModelBase
 {
     private readonly IProfileService _profileService;
     private readonly IDialogService _dialogService;
+    private readonly ILogService _logService;
 
-    public ProfileManagerViewModel(IProfileService profileService, IDialogService dialogService)
+    public ProfileManagerViewModel(IProfileService profileService, IDialogService dialogService, ILogService logService)
     {
         _profileService = profileService;
         _dialogService = dialogService;
+        _logService = logService;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         CreateCommand = new AsyncRelayCommand(CreateAsync, CanCreate);
@@ -24,7 +27,7 @@ public partial class ProfileManagerViewModel : ViewModelBase
         ImportCommand = new AsyncRelayCommand(ImportAsync, () => !IsLoading);
         ExportCommand = new AsyncRelayCommand(ExportAsync, CanOperateOnSelection);
 
-        _ = RefreshAsync();
+        BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "加载配置列表");
     }
 
     public ObservableCollection<Profile> Profiles { get; } = new();

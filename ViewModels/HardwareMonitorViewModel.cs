@@ -147,10 +147,10 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         {
             Interval = TimeSpan.FromSeconds(HardwareMonitorChartFactory.SampleIntervalSeconds)
         };
-        _timer.Tick += (_, _) => _ = RefreshAsync();
+        _timer.Tick += (_, _) => BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "刷新硬件监控数据");
         _timer.Start();
 
-        _ = RefreshAsync();
+        BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "初始化硬件监控数据");
     }
 
     [ObservableProperty]
@@ -245,7 +245,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
         if (value)
         {
             _timer.Start();
-            _ = RefreshAsync();
+            BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "启用硬件监控后刷新数据");
         }
         else
         {
@@ -255,7 +255,7 @@ public partial class HardwareMonitorViewModel : ViewModelBase, IDisposable
 
     private void Refresh()
     {
-        _ = RefreshAsync();
+        BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "刷新硬件监控数据");
     }
 
     private async Task RefreshAsync()

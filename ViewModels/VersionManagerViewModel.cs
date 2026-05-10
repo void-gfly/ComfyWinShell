@@ -4,6 +4,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.ViewModels;
@@ -32,7 +33,7 @@ public partial class VersionManagerViewModel : ViewModelBase
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         SwitchVersionCommand = new AsyncRelayCommand<GitCommit>(SwitchVersionAsync);
 
-        _ = RefreshAsync();
+        BackgroundTaskObserver.Observe(RefreshAsync(), _logService, "加载版本管理信息");
     }
 
     public ObservableCollection<GitCommit> StableVersions { get; } = new();

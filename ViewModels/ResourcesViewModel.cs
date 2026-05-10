@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 using WpfDesktop.Views;
 
@@ -359,8 +360,8 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         StatusMessage = $"已加载 {CustomNodesCount} 个节点, {ModelFoldersCount} 个模型目录, {ExtraModelFoldersCount} 个扩展模型目录, {WorkflowsCount} 个工作流";
 
         // 后台计算模型文件夹大小
-        _ = CalculateFolderSizesAsync(ModelFolders, false);
-        _ = CalculateFolderSizesAsync(ExtraModelFolders, true);
+        BackgroundTaskObserver.Observe(CalculateFolderSizesAsync(ModelFolders, false), _logService, "计算模型文件夹大小");
+        BackgroundTaskObserver.Observe(CalculateFolderSizesAsync(ExtraModelFolders, true), _logService, "计算扩展模型文件夹大小");
     }
 
     private async Task LoadCustomNodesAsync()

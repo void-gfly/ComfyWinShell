@@ -56,7 +56,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         Configuration = new ComfyConfiguration();
         AttachConfigurationHandlers(Configuration);
 
-        _ = LoadDefaultAsync();
+        BackgroundTaskObserver.Observe(LoadDefaultAsync(), _logService, "加载默认配置");
     }
 
     public async Task OnNavigatedToAsync()
@@ -301,14 +301,14 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         }
 
         // 当 EnableManager 被勾选时，检查并安装 ComfyUI-Manager
-        if (ReferenceEquals(sender, Configuration?.Manager) && e.PropertyName == nameof(ManagerConfiguration.EnableManager))
-        {
-            if (Configuration?.Manager?.EnableManager == true)
+            if (ReferenceEquals(sender, Configuration?.Manager) && e.PropertyName == nameof(ManagerConfiguration.EnableManager))
             {
-                _ = CheckAndInstallManagerAsync();
+                if (Configuration?.Manager?.EnableManager == true)
+                {
+                    BackgroundTaskObserver.Observe(CheckAndInstallManagerAsync(), _logService, "检查并安装 ComfyUI-Manager");
+                }
             }
         }
-    }
 
     partial void OnExtraModelPathsTextChanged(string value)
     {

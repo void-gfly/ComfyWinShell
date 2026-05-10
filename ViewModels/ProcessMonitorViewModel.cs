@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.ViewModels;
@@ -57,7 +58,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
             LogLineHeight = ResolveLogLineHeight(message.Value.LogLineHeight);
         });
 
-        _ = InitializeAsync();
+        BackgroundTaskObserver.Observe(InitializeAsync(), _logService, "初始化进程监视器");
     }
 
     private async Task InitializeAsync()
