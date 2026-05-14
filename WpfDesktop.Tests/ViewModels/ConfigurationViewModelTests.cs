@@ -9,7 +9,7 @@ namespace WpfDesktop.Tests.ViewModels;
 public sealed class ConfigurationViewModelTests
 {
     [Fact]
-    public void SyncSelectedCudaDevice_WhenNoMatchingItem_DoesNotClearSavedCudaDevice()
+    public void SyncSelectedCudaDevice_WhenNoMatchingItem_ShowsSavedCudaDevice()
     {
         var configuration = new ComfyConfiguration
         {
@@ -37,7 +37,8 @@ public sealed class ConfigurationViewModelTests
             .Invoke(viewModel, null);
 
         Assert.Equal(1, viewModel.Configuration.Device.CudaDevice);
-        Assert.Null(viewModel.SelectedCudaDevice?.DeviceId);
+        Assert.Equal(1, viewModel.SelectedCudaDevice?.DeviceId);
+        Assert.Contains(viewModel.CudaDevices, device => device.DeviceId == 1);
     }
 
     [Fact]
@@ -66,6 +67,37 @@ public sealed class ConfigurationViewModelTests
     }
 
     [Fact]
+    public void SelectedCudaDevice_WhenSelectionBecomesNull_DoesNotClearSavedCudaDeviceAndLogsWarning()
+    {
+        var configuration = new ComfyConfiguration
+        {
+            Device = new DeviceConfiguration
+            {
+                CudaDevice = 1
+            }
+        };
+        var logService = new FakeLogService();
+        var viewModel = new ConfigurationViewModel(
+            new FakeConfigurationService(configuration),
+            new FakeComfyPathService(),
+            new FakeProfileService(),
+            new FakeHardwareMonitorService(),
+            new ArgumentBuilder(),
+            new FakeDialogService(),
+            logService);
+
+        viewModel.Configuration = configuration;
+        viewModel.SelectedCudaDevice = CudaDeviceOption.Create(1, "NVIDIA GeForce RTX 4070");
+
+        viewModel.SelectedCudaDevice = null;
+
+        Assert.Equal(1, viewModel.Configuration.Device.CudaDevice);
+        Assert.Contains(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("CUDA 设备选择被置空", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Constructor_DoesNotStartLoadingConfiguration()
     {
         var configurationService = new FakeConfigurationService(new ComfyConfiguration());
@@ -85,6 +117,39 @@ public sealed class ConfigurationViewModelTests
         await loadTask;
 
         Assert.Equal(1, configurationService.LoadCalls);
+    }
+
+    [Fact]
+    public async Task OnNavigatedToAsync_WhenSavedCudaDeviceIsNotEnumerated_ShowsSavedCudaDevice()
+    {
+        var configuration = new ComfyConfiguration
+        {
+            Device = new DeviceConfiguration
+            {
+                CudaDevice = 1
+            }
+        };
+        var configurationService = new FakeConfigurationService(configuration);
+        var logService = new FakeLogService();
+        var viewModel = new ConfigurationViewModel(
+            configurationService,
+            new FakeComfyPathService(),
+            new FakeProfileService(),
+            new FakeHardwareMonitorService(),
+            new ArgumentBuilder(),
+            new FakeDialogService(),
+            logService);
+
+        var loadTask = viewModel.OnNavigatedToAsync();
+        configurationService.CompleteLoad();
+        await loadTask;
+
+        Assert.Equal(1, viewModel.Configuration.Device.CudaDevice);
+        Assert.Equal(1, viewModel.SelectedCudaDevice?.DeviceId);
+        Assert.Contains(viewModel.CudaDevices, device => device.DeviceId == 1);
+        Assert.Contains(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("CUDA 设备枚举未返回已保存设备", StringComparison.Ordinal));
     }
 
     private sealed class FakeConfigurationService : IConfigurationService
@@ -205,16 +270,21 @@ public sealed class ConfigurationViewModelTests
         public event EventHandler<string>? LogReceived;
         public event EventHandler<LogEntry>? LogEntryReceived;
 
+        public List<(string Message, GUILogLevel Level)> Entries { get; } = new();
+
         public void Log(string message)
         {
+            Log(message, GUILogLevel.Info);
         }
 
         public void Log(string message, GUILogLevel level)
         {
+            Entries.Add((message, level));
         }
 
         public void LogError(string message, Exception? exception = null)
         {
+            Entries.Add((message, GUILogLevel.Error));
         }
     }
 }

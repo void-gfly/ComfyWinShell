@@ -40,6 +40,20 @@ public class CudaDeviceOption
     }
 
     /// <summary>
+    /// 创建已保存但当前未检测到的设备选项。
+    /// </summary>
+    /// <param name="deviceId">已保存的 CUDA 设备编号。</param>
+    /// <returns>用于稳定回显已保存设备编号的选项。</returns>
+    public static CudaDeviceOption Saved(int deviceId)
+    {
+        return new CudaDeviceOption
+        {
+            DeviceId = deviceId,
+            DisplayName = $"{deviceId}: 已保存 CUDA 设备（当前未检测到）"
+        };
+    }
+
+    /// <summary>
     /// 返回用于界面展示的设备名称。
     /// </summary>
     /// <returns>当前选项的显示名称。</returns>

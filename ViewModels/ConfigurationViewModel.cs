@@ -147,10 +147,24 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
             return;
         }
 
-        if (Configuration?.Device != null)
+        if (Configuration?.Device == null)
         {
-            Configuration.Device.CudaDevice = value?.DeviceId;
+            return;
         }
+
+        if (value == null)
+        {
+            if (Configuration.Device.CudaDevice.HasValue)
+            {
+                _logService.Log(
+                    $"[配置] CUDA 设备选择被置空，已忽略本次非预期重置，继续保留已保存设备 ID={Configuration.Device.CudaDevice.Value}。",
+                    GUILogLevel.Warning);
+            }
+
+            return;
+        }
+
+        Configuration.Device.CudaDevice = value.DeviceId;
     }
 
     private async Task LoadDefaultAsync()
@@ -369,24 +383,46 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         try
         {
             var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot());
-            CudaDevices.Clear();
-            CudaDevices.Add(CudaDeviceOption.None);
+            var savedCudaDeviceId = Configuration?.Device?.CudaDevice;
 
             // 只添加 NVIDIA GPU（CUDA 设备）
             var nvidiaGpus = snapshot.Gpus
                 .Where(g => g.Name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            for (var i = 0; i < nvidiaGpus.Count; i++)
+            _isSyncingSelectedCudaDevice = true;
+            try
             {
-                CudaDevices.Add(CudaDeviceOption.Create(i, nvidiaGpus[i].Name));
-            }
+                CudaDevices.Clear();
+                CudaDevices.Add(CudaDeviceOption.None);
 
-            SyncSelectedCudaDevice();
+                for (var i = 0; i < nvidiaGpus.Count; i++)
+                {
+                    CudaDevices.Add(CudaDeviceOption.Create(i, nvidiaGpus[i].Name));
+                }
+
+                if (savedCudaDeviceId.HasValue &&
+                    CudaDevices.All(d => d.DeviceId != savedCudaDeviceId.Value))
+                {
+                    _logService.Log(
+                        $"[配置] CUDA 设备枚举未返回已保存设备 ID={savedCudaDeviceId.Value}，当前检测到 NVIDIA 设备数={nvidiaGpus.Count}。已保留配置值并使用占位项回显。",
+                        GUILogLevel.Warning);
+                }
+
+                SyncSelectedCudaDeviceCore(savedCudaDeviceId);
+            }
+            finally
+            {
+                _isSyncingSelectedCudaDevice = false;
+            }
         }
         catch (Exception ex)
         {
-            _logService.LogError("刷新 CUDA 设备列表失败", ex);
+            _logService.Log(
+                $"[配置] CUDA 设备枚举失败，已保留当前配置值。{ex.GetType().Name}: {ex.Message}",
+                GUILogLevel.Warning);
+
+            SyncSelectedCudaDevice();
         }
     }
 
@@ -400,20 +436,38 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         _isSyncingSelectedCudaDevice = true;
         try
         {
-            if (cudaDeviceId.HasValue)
-            {
-                SelectedCudaDevice = CudaDevices.FirstOrDefault(d => d.DeviceId == cudaDeviceId.Value)
-                                     ?? CudaDevices.FirstOrDefault(); // 找不到则选"未选择"
-            }
-            else
-            {
-                SelectedCudaDevice = CudaDevices.FirstOrDefault(); // 选"未选择"
-            }
+            SyncSelectedCudaDeviceCore(cudaDeviceId);
         }
         finally
         {
             _isSyncingSelectedCudaDevice = false;
         }
+    }
+
+    private void SyncSelectedCudaDeviceCore(int? cudaDeviceId)
+    {
+        if (cudaDeviceId.HasValue)
+        {
+            SelectedCudaDevice = CudaDevices.FirstOrDefault(d => d.DeviceId == cudaDeviceId.Value)
+                                 ?? AddSavedCudaDeviceOption(cudaDeviceId.Value);
+        }
+        else
+        {
+            SelectedCudaDevice = CudaDevices.FirstOrDefault(); // 选"未选择"
+        }
+    }
+
+    private CudaDeviceOption AddSavedCudaDeviceOption(int cudaDeviceId)
+    {
+        var existing = CudaDevices.FirstOrDefault(d => d.DeviceId == cudaDeviceId);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var option = CudaDeviceOption.Saved(cudaDeviceId);
+        CudaDevices.Add(option);
+        return option;
     }
 
     /// <summary>
