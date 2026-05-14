@@ -102,7 +102,6 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             progress?.Report("📦 开始复制工作流所需模型...");
             var modelsCopied = await CopyRequiredModelsAsync(
                 analysisResult.RequiredModels,
-                comfyPath,
                 packagedComfyPath,
                 progress);
             result.TotalModelsCopied = modelsCopied;
@@ -136,6 +135,74 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             result.ErrorMessage = ex.Message;
             result.EndTime = DateTime.Now;
             _logService.LogError("工作流打包失败", ex);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 仅打包工作流所需的模型目录。
+    /// </summary>
+    /// <param name="analysisResult">工作流分析结果。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <param name="progressPercentage">百分比进度回调。</param>
+    /// <returns>打包结果对象。</returns>
+    public async Task<WorkflowPackageResult> PackageWorkflowModelsOnlyAsync(
+        WorkflowAnalysisResult analysisResult,
+        string targetPath,
+        IProgress<string>? progress = null,
+        IProgress<double>? progressPercentage = null)
+    {
+        var result = new WorkflowPackageResult
+        {
+            TargetPath = targetPath,
+            StartTime = DateTime.Now
+        };
+
+        try
+        {
+            if (!Directory.Exists(targetPath))
+            {
+                Directory.CreateDirectory(targetPath);
+            }
+
+            progress?.Report("📦 开始仅打包模型目录...");
+            progressPercentage?.Report(10);
+
+            var modelsCopied = await CopyRequiredModelsAsync(
+                analysisResult.RequiredModels,
+                targetPath,
+                progress);
+
+            if (modelsCopied == 0)
+            {
+                result.Success = false;
+                result.ErrorMessage = "没有可导出的模型文件";
+                result.EndTime = DateTime.Now;
+                return result;
+            }
+
+            result.TotalModelsCopied = modelsCopied;
+            result.TotalSizeBytes = CalculateDirectorySize(Path.Combine(targetPath, "models"));
+            var sizeInMB = result.TotalSizeBytes / (1024.0 * 1024.0);
+            var sizeInGB = result.TotalSizeBytes / (1024.0 * 1024.0 * 1024.0);
+            var sizeDisplay = sizeInGB >= 1 ? $"{sizeInGB:F2} GB" : $"{sizeInMB:F2} MB";
+
+            progress?.Report($"📊 模型目录导出完成，总大小: {sizeDisplay}");
+            progressPercentage?.Report(100);
+
+            result.Success = true;
+            result.EndTime = DateTime.Now;
+
+            _logService.Log($"模型目录导出完成: {result.TotalModelsCopied} 个模型, {sizeDisplay}");
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            result.EndTime = DateTime.Now;
+            _logService.LogError("模型目录导出失败", ex);
         }
 
         return result;
@@ -205,17 +272,11 @@ public class WorkflowPackagerService : IWorkflowPackagerService
 
             // 第二步：合并去重模型后复制
             progress?.Report("📦 合并工作流模型依赖...");
-            var mergedModels = analysisResults
-                .SelectMany(r => r.RequiredModels)
-                .Where(m => !string.IsNullOrWhiteSpace(m.ModelPath))
-                .GroupBy(m => m.ModelPath, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First())
-                .ToList();
+            var mergedModels = GetMergedRequiredModels(analysisResults);
 
             progress?.Report($"📦 去重后模型总数: {mergedModels.Count}");
             var modelsCopied = await CopyRequiredModelsAsync(
                 mergedModels,
-                comfyPath,
                 packagedComfyPath,
                 progress);
             result.TotalModelsCopied = modelsCopied;
@@ -256,6 +317,92 @@ public class WorkflowPackagerService : IWorkflowPackagerService
             result.ErrorMessage = ex.Message;
             result.EndTime = DateTime.Now;
             _logService.LogError("批量工作流打包失败", ex);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 仅打包批量工作流所需的模型目录。
+    /// </summary>
+    /// <param name="analysisResults">多个工作流分析结果。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">文本进度回调。</param>
+    /// <param name="progressPercentage">百分比进度回调。</param>
+    /// <returns>打包结果对象。</returns>
+    public async Task<WorkflowPackageResult> PackageBatchWorkflowModelsOnlyAsync(
+        List<WorkflowAnalysisResult> analysisResults,
+        string targetPath,
+        IProgress<string>? progress = null,
+        IProgress<double>? progressPercentage = null)
+    {
+        var result = new WorkflowPackageResult
+        {
+            TargetPath = targetPath,
+            StartTime = DateTime.Now
+        };
+
+        try
+        {
+            if (analysisResults.Count == 0)
+            {
+                result.Success = false;
+                result.ErrorMessage = "未提供可导出的工作流分析结果";
+                return result;
+            }
+
+            if (!Directory.Exists(targetPath))
+            {
+                Directory.CreateDirectory(targetPath);
+            }
+
+            var mergedModels = GetMergedRequiredModels(analysisResults);
+            if (mergedModels.Count == 0)
+            {
+                result.Success = false;
+                result.ErrorMessage = "没有可导出的模型文件";
+                result.EndTime = DateTime.Now;
+                return result;
+            }
+
+            progress?.Report("📦 开始仅打包模型目录...");
+            progress?.Report($"📦 去重后模型总数: {mergedModels.Count}");
+            progressPercentage?.Report(10);
+
+            var modelsCopied = await CopyRequiredModelsAsync(
+                mergedModels,
+                targetPath,
+                progress);
+
+            if (modelsCopied == 0)
+            {
+                result.Success = false;
+                result.ErrorMessage = "没有可导出的模型文件";
+                result.EndTime = DateTime.Now;
+                return result;
+            }
+
+            result.TotalModelsCopied = modelsCopied;
+            result.TotalSizeBytes = CalculateDirectorySize(Path.Combine(targetPath, "models"));
+            var sizeInMB = result.TotalSizeBytes / (1024.0 * 1024.0);
+            var sizeInGB = result.TotalSizeBytes / (1024.0 * 1024.0 * 1024.0);
+            var sizeDisplay = sizeInGB >= 1 ? $"{sizeInGB:F2} GB" : $"{sizeInMB:F2} MB";
+
+            progress?.Report($"📊 模型目录导出完成，总大小: {sizeDisplay}");
+            progressPercentage?.Report(100);
+
+            result.Success = true;
+            result.EndTime = DateTime.Now;
+
+            _logService.Log(
+                $"批量模型目录导出完成: 工作流 {analysisResults.Count} 个, 模型 {result.TotalModelsCopied} 个, {sizeDisplay}");
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            result.EndTime = DateTime.Now;
+            _logService.LogError("批量模型目录导出失败", ex);
         }
 
         return result;
@@ -406,13 +553,11 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     /// 复制工作流所需的模型（支持来自扩展模型目录的模型）
     /// </summary>
     /// <param name="requiredModels">待复制模型列表。</param>
-    /// <param name="comfyPath">ComfyUI 核心目录。</param>
     /// <param name="targetPath">打包目标目录。</param>
     /// <param name="progress">文本进度回调。</param>
     /// <returns>复制成功的模型数量。</returns>
     private async Task<int> CopyRequiredModelsAsync(
         List<RequiredModel> requiredModels,
-        string comfyPath,
         string targetPath,
         IProgress<string>? progress)
     {
@@ -421,7 +566,10 @@ public class WorkflowPackagerService : IWorkflowPackagerService
 
         await Task.Run(() =>
         {
-            foreach (var model in requiredModels.Where(m => m.Exists && !string.IsNullOrEmpty(m.FullPath)))
+            foreach (var model in requiredModels.Where(m =>
+                         m.Exists &&
+                         !string.IsNullOrWhiteSpace(m.FullPath) &&
+                         !string.IsNullOrWhiteSpace(m.ModelPath)))
             {
                 try
                 {
@@ -457,6 +605,19 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         });
 
         return modelsCopied;
+    }
+
+    /// <summary>
+    /// 合并并去重多个工作流的模型依赖。
+    /// </summary>
+    private static List<RequiredModel> GetMergedRequiredModels(IEnumerable<WorkflowAnalysisResult> analysisResults)
+    {
+        return analysisResults
+            .SelectMany(r => r.RequiredModels)
+            .Where(m => !string.IsNullOrWhiteSpace(m.ModelPath))
+            .GroupBy(m => m.ModelPath, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
     }
 
     /// <summary>

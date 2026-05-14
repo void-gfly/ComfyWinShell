@@ -22,6 +22,20 @@ public interface IWorkflowPackagerService
         IProgress<double>? progressPercentage = null);
 
     /// <summary>
+    /// 仅打包工作流所需的模型目录。
+    /// </summary>
+    /// <param name="analysisResult">工作流分析结果。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">进度报告（文本消息）。</param>
+    /// <param name="progressPercentage">进度百分比。</param>
+    /// <returns>打包结果。</returns>
+    Task<WorkflowPackageResult> PackageWorkflowModelsOnlyAsync(
+        WorkflowAnalysisResult analysisResult,
+        string targetPath,
+        IProgress<string>? progress = null,
+        IProgress<double>? progressPercentage = null);
+
+    /// <summary>
     /// 批量打包多个工作流（合并重叠资源）
     /// </summary>
     /// <param name="analysisResults">多个工作流分析结果</param>
@@ -30,6 +44,20 @@ public interface IWorkflowPackagerService
     /// <param name="progressPercentage">进度百分比</param>
     /// <returns>打包结果</returns>
     Task<WorkflowPackageResult> PackageBatchWorkflowsAsync(
+        List<WorkflowAnalysisResult> analysisResults,
+        string targetPath,
+        IProgress<string>? progress = null,
+        IProgress<double>? progressPercentage = null);
+
+    /// <summary>
+    /// 仅打包批量工作流所需的模型目录。
+    /// </summary>
+    /// <param name="analysisResults">多个工作流分析结果。</param>
+    /// <param name="targetPath">打包目标目录。</param>
+    /// <param name="progress">进度报告（文本消息）。</param>
+    /// <param name="progressPercentage">进度百分比。</param>
+    /// <returns>打包结果。</returns>
+    Task<WorkflowPackageResult> PackageBatchWorkflowModelsOnlyAsync(
         List<WorkflowAnalysisResult> analysisResults,
         string targetPath,
         IProgress<string>? progress = null,

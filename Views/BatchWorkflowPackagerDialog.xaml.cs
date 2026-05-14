@@ -136,6 +136,13 @@ public partial class BatchWorkflowPackagerDialog : Window, INotifyPropertyChange
         set { _canStartPackage = value; OnPropertyChanged(); }
     }
 
+    private bool _canPackageModelsOnly;
+    public bool CanPackageModelsOnly
+    {
+        get => _canPackageModelsOnly;
+        set { _canPackageModelsOnly = value; OnPropertyChanged(); }
+    }
+
     #endregion
 
     #region Event Handlers
@@ -205,6 +212,67 @@ public partial class BatchWorkflowPackagerDialog : Window, INotifyPropertyChange
             _logService.LogError("批量工作流打包异常", ex);
             MessageBox.Show(
                 $"打包过程中发生异常！\n\n{ex.Message}",
+                "错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsPackaging = false;
+        }
+    }
+
+    private async void PackageModelsOnlyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ValidateModelsOnlyTargetPath())
+        {
+            return;
+        }
+
+        IsPackaging = true;
+        PackageProgress = 0;
+        LogOutput = "";
+        AddLog("开始仅打包模型目录...");
+
+        try
+        {
+            var progress = new Progress<string>(message => AddLog(message));
+            var progressPercentage = new Progress<double>(percentage => PackageProgress = percentage);
+
+            var result = await _packagerService.PackageBatchWorkflowModelsOnlyAsync(
+                _analysisResults,
+                TargetPath,
+                progress,
+                progressPercentage);
+
+            if (result.Success)
+            {
+                AddLog("✅ 模型目录导出完成！");
+                StatusMessage = $"模型目录导出成功！目标目录: {TargetPath}";
+                MessageBox.Show(
+                    $"批量模型目录导出完成！\n\n目标目录: {TargetPath}",
+                    "导出成功",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            else
+            {
+                AddLog($"❌ 导出失败: {result.ErrorMessage}");
+                StatusMessage = $"导出失败: {result.ErrorMessage}";
+                MessageBox.Show(
+                    $"导出失败！\n\n错误信息: {result.ErrorMessage}",
+                    "导出失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            AddLog($"❌ 导出异常: {ex.Message}");
+            StatusMessage = $"导出异常: {ex.Message}";
+            _logService.LogError("批量模型目录导出异常", ex);
+            MessageBox.Show(
+                $"导出过程中发生异常！\n\n{ex.Message}",
                 "错误",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -331,10 +399,42 @@ public partial class BatchWorkflowPackagerDialog : Window, INotifyPropertyChange
         return true;
     }
 
+    private bool ValidateModelsOnlyTargetPath()
+    {
+        if (string.IsNullOrWhiteSpace(TargetPath))
+        {
+            MessageBox.Show(
+                "请先选择打包目标目录！",
+                "提示",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(TargetPath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"无法创建目标目录！\n\n{ex.Message}",
+                "错误",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
+
+        return true;
+    }
+
     private void UpdateCanStartPackage()
     {
         CanStartPackage = !IsPackaging
             && (MissingModelCount == 0 || IgnoreMissingModels)
+            && !string.IsNullOrWhiteSpace(TargetPath);
+        CanPackageModelsOnly = !IsPackaging
+            && MergedModelsCount > 0
             && !string.IsNullOrWhiteSpace(TargetPath);
     }
 

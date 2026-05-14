@@ -38,8 +38,10 @@
  dotnet publish WpfDesktop.csproj -c Release
 ```
 
-## 4. 测试（当前仓库无测试项目）
-- 本项目人工测试,无需创建测试项目
+## 4. 测试
+- 简单单点测试代码优先用 .NET 10 file-based apps，单个 `.cs` 文件直接运行，不先建项目。
+- 仅限临时验证、一次性实验、小工具；涉及多文件、长期维护、CI 回归或复杂依赖时，改用正式测试项目。
+- 测试脚本优先用 `dotnet run file.cs` 或 `dotnet file.cs`，需要包引用时用 `#:package`，不要为此额外搭脚手架。
 
 ## 5. Lint / 格式化
 - 未发现 `.editorconfig` 或专用格式化配置
