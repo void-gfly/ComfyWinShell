@@ -49,6 +49,11 @@ public class ProcessService : IProcessService, IDisposable
     private bool _webSocketWaitingForServerNotified;
     private bool _webSocketDisconnectedNotified;
 
+    static ProcessService()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
     /// <summary>
     /// 将当前进程附加到目标控制台。
     /// </summary>
@@ -1040,6 +1045,7 @@ public class ProcessService : IProcessService, IDisposable
         _lastMainPath = mainPath;
 
         var argsStr = string.IsNullOrWhiteSpace(arguments) ? "" : $" {arguments}";
+        var outputEncoding = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
         var startInfo = new ProcessStartInfo
         {
             FileName = pythonPath,
@@ -1048,8 +1054,8 @@ public class ProcessService : IProcessService, IDisposable
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardOutputEncoding = System.Text.Encoding.UTF8,
-            StandardErrorEncoding = System.Text.Encoding.UTF8,
+            StandardOutputEncoding = outputEncoding,
+            StandardErrorEncoding = outputEncoding,
             CreateNoWindow = true
         };
 

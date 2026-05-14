@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using System.Threading;
 using WpfDesktop.Models;
@@ -149,6 +150,27 @@ public sealed class ProcessServiceTests
         Assert.NotNull(startInfo);
         Assert.False(startInfo!.EnvironmentVariables.ContainsKey("PYTHONUTF8"));
         Assert.False(startInfo.EnvironmentVariables.ContainsKey("PYTHONIOENCODING"));
+    }
+
+    [Fact]
+    public void BuildStartInfo_UsesCurrentAnsiCodePage_ForComfyUiOutput()
+    {
+        using var tempRoot = new TempComfyRoot();
+        var comfyCorePath = Path.Combine(tempRoot.RootPath, "ComfyUI");
+        Directory.CreateDirectory(comfyCorePath);
+        File.WriteAllText(Path.Combine(comfyCorePath, "main.py"), "print('ok')");
+
+        using var service = new ProcessService(
+            new ArgumentBuilder(),
+            new FakePythonPathService(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe"),
+            new FakeProxyService(),
+            new FakeLogService());
+
+        var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
+
+        Assert.NotNull(startInfo);
+        Assert.Equal(CultureInfo.CurrentCulture.TextInfo.ANSICodePage, startInfo!.StandardOutputEncoding?.CodePage);
+        Assert.Equal(CultureInfo.CurrentCulture.TextInfo.ANSICodePage, startInfo.StandardErrorEncoding?.CodePage);
     }
 
     [Theory]
