@@ -50,7 +50,6 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
-        // 只订阅 LogEntryReceived，避免与 LogReceived 重复（两者同时触发）
         _logService.LogEntryReceived += OnLogEntryReceived;
         WeakReferenceMessenger.Default.Register<AppSettingsChangedMessage>(this, (_, message) =>
         {
@@ -203,19 +202,32 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         });
     }
 
-    private void OnOutputReceived(object? sender, string line)
-    {
-        // 进程输出默认为普通日志（白色）
-        AddLogEntry(new LogEntry
-        {
-            Message = line,
-            Level = GUILogLevel.Info,
-            Timestamp = DateTime.Now
-        });
-    }
-
     private void OnLogEntryReceived(object? sender, LogEntry entry)
     {
+        AddLogEntry(entry);
+    }
+
+    private void OnOutputReceived(object? sender, string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        var entry = line.StartsWith("[Comfy] ", StringComparison.Ordinal)
+            ? new LogEntry
+            {
+                Message = line.Substring("[Comfy] ".Length),
+                Level = GUILogLevel.ComfyRaw,
+                Timestamp = DateTime.Now
+            }
+            : new LogEntry
+            {
+                Message = line,
+                Level = GUILogLevel.Info,
+                Timestamp = DateTime.Now
+            };
+
         AddLogEntry(entry);
     }
 

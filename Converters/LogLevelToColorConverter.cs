@@ -21,6 +21,7 @@ public sealed class LogLevelToColorConverter : IValueConverter
                 GUILogLevel.Success => new SolidColorBrush(Color.FromRgb(0, 255, 0)),      // 绿色 #00FF00
                 GUILogLevel.Warning => new SolidColorBrush(Color.FromRgb(255, 165, 0)),    // 橙色 #FFA500
                 GUILogLevel.Error => new SolidColorBrush(Color.FromRgb(255, 0, 0)),        // 红色 #FF0000
+                GUILogLevel.ComfyRaw => new SolidColorBrush(Color.FromRgb(220, 220, 220)), // 稍暗白色 #DCDCDC
                 _ => new SolidColorBrush(Color.FromRgb(255, 255, 255))                  // 白色 #FFFFFF
             };
         }

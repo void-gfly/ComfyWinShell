@@ -34,7 +34,8 @@ public class LogService : ILogService
     /// <param name="level">日志级别。</param>
     public void Log(string message, GUILogLevel level)
     {
-        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        var legacyMessage = FormatLegacyMessage(message, level);
         var entry = new LogEntry
         {
             Message = message,
@@ -46,7 +47,7 @@ public class LogService : ILogService
         LogEntryReceived?.Invoke(this, entry);
 
         // 触发旧事件（向后兼容）
-        LogReceived?.Invoke(this, $"[{timestamp}] {message}");
+        LogReceived?.Invoke(this, $"[{timestamp}] {legacyMessage}");
     }
 
     /// <summary>
@@ -56,7 +57,7 @@ public class LogService : ILogService
     /// <param name="exception">关联异常对象。</param>
     public void LogError(string message, Exception? exception = null)
     {
-        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         
         if (exception != null)
         {
@@ -91,5 +92,10 @@ public class LogService : ILogService
             LogEntryReceived?.Invoke(this, entry);
             LogReceived?.Invoke(this, $"[{timestamp}] [ERROR] {message}");
         }
+    }
+
+    private static string FormatLegacyMessage(string message, GUILogLevel level)
+    {
+        return level == GUILogLevel.ComfyRaw ? $"[Comfy] {message}" : message;
     }
 }

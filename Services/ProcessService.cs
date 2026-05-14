@@ -220,7 +220,7 @@ public class ProcessService : IProcessService, IDisposable
                     {
                         _status.OutputLogs.Add(line);
                     }
-                    OutputReceived?.Invoke(this, line);
+                    PublishComfyOutput(line);
                 }
             };
 
@@ -233,7 +233,7 @@ public class ProcessService : IProcessService, IDisposable
                     {
                         _status.OutputLogs.Add(line);
                     }
-                    OutputReceived?.Invoke(this, line);
+                    PublishComfyOutput(line);
                 }
             };
 
@@ -1360,6 +1360,15 @@ public class ProcessService : IProcessService, IDisposable
     private static void TraceCleanupDetail(string message)
     {
         Debug.WriteLine($"[ProcessService] {message}");
+    }
+
+    /// <summary>
+    /// 记录并转发 ComfyUI 的原始输出行。
+    /// </summary>
+    /// <param name="line">原始输出行。</param>
+    private void PublishComfyOutput(string line)
+    {
+        OutputReceived?.Invoke(this, $"[Comfy] {line}");
     }
 
     /// <summary>

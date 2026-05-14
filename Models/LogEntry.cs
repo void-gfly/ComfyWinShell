@@ -23,7 +23,12 @@ public enum GUILogLevel
     /// <summary>
     /// 错误信息（红色）
     /// </summary>
-    Error
+    Error,
+
+    /// <summary>
+    /// ComfyUI 原始输出（稍暗的白色）
+    /// </summary>
+    ComfyRaw
 }
 
 /// <summary>
@@ -49,5 +54,7 @@ public sealed class LogEntry
     /// <summary>
     /// 格式化的显示文本（包含时间戳）
     /// </summary>
-    public string FormattedMessage => $"[{Timestamp:HH:mm:ss}] {Message}";
+    public string FormattedMessage => Level == GUILogLevel.ComfyRaw
+        ? $"[{Timestamp:yyyy-MM-dd HH:mm:ss}] [Comfy] {Message}"
+        : $"[{Timestamp:yyyy-MM-dd HH:mm:ss}] {Message}";
 }
