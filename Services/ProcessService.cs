@@ -1,12 +1,10 @@
 using System.Diagnostics;
 using System.IO;
-using System.Management;
 using System.Net.WebSockets;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -24,6 +22,7 @@ public class ProcessService : IProcessService, IDisposable
     private const int RecoveryWindowMs = 90000;
     private const int WebSocketReconnectDelayMs = 2000;
     private const int WebSocketInitialConnectDelayMs = 6000;
+    private const int LingeringProcessWaitTimeoutMs = 5000;
 
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IPythonPathService _pythonPathService;
@@ -158,7 +157,7 @@ public class ProcessService : IProcessService, IDisposable
     /// <returns>启动成功时返回 true，否则返回 false。</returns>
     public Task<bool> StartAsync(string comfyRootPath, ComfyConfiguration configuration, CancellationToken cancellationToken = default)
     {
-        return Task.Run(() =>
+        return Task.Run(async () =>
         {
             if (_process is { HasExited: false })
             {
@@ -182,31 +181,15 @@ public class ProcessService : IProcessService, IDisposable
             _stopRequestedByUser = false;
             _recoveryDeadlineUtc = null;
 
-            var existingProcess = FindExistingComfyProcess(_lastPythonPath!, _lastMainPath!);
-            if (existingProcess != null)
+            var cleanupResult = await CleanupMatchingComfyPythonProcessesAsync(
+                _lastPythonPath!,
+                TimeSpan.FromMilliseconds(LingeringProcessWaitTimeoutMs),
+                cancellationToken,
+                logWhenNoMatch: true);
+
+            if (!cleanupResult.Completed)
             {
-                OutputReceived?.Invoke(this, $"[ProcessService] 检测到同副本已在运行(PID={existingProcess.Id})，跳过重复启动，转入连接检测。");
-                _process = existingProcess;
-                _process.EnableRaisingEvents = true;
-                _process.Exited -= OnProcessExited;
-                _process.Exited += OnProcessExited;
-
-                lock (_statusLock)
-                {
-                    _status = new ProcessStatus
-                    {
-                        VersionId = "local",
-                        State = ProcessState.Starting,
-                        IsRunning = true,
-                        ProcessId = existingProcess.Id,
-                        StartTime = DateTime.Now
-                    };
-                }
-
-                StatusChanged?.Invoke(this, CreateStatusSnapshot());
-                StartHeartbeat();
-                StartWebSocketMonitor();
-                return true;
+                return false;
             }
 
             var fullCommand = string.IsNullOrWhiteSpace(startInfo.Arguments)
@@ -319,16 +302,21 @@ public class ProcessService : IProcessService, IDisposable
     /// <returns>发送停止或完成清理时返回 true，否则返回 false。</returns>
     public Task<bool> StopAsync(CancellationToken cancellationToken = default)
     {
-        return Task.Run(() =>
+        return Task.Run(async () =>
         {
             _stopRequestedByUser = true;
             _recoveryDeadlineUtc = null;
 
             if (_process == null || _process.HasExited)
             {
-                var killed = TryKillLingeringComfyPythonProcesses();
-                MarkStopped(killed ? "检测到残留进程并已清理" : "已停止");
-                return killed;
+                var cleanupResult = await CleanupMatchingComfyPythonProcessesAsync(
+                    _lastPythonPath,
+                    TimeSpan.FromMilliseconds(LingeringProcessWaitTimeoutMs),
+                    cancellationToken,
+                    logWhenNoMatch: false);
+
+                MarkStopped(cleanupResult.KilledCount > 0 ? "检测到残留进程并已清理" : "已停止");
+                return cleanupResult.Completed && cleanupResult.KilledCount > 0;
             }
 
             lock (_statusLock)
@@ -359,7 +347,7 @@ public class ProcessService : IProcessService, IDisposable
         var pythonPath = _pythonPathService.PythonPath;
         var mainPath = ResolveMainPath(comfyRootPath);
 
-        if (string.IsNullOrWhiteSpace(pythonPath) || string.IsNullOrWhiteSpace(mainPath))
+        if (string.IsNullOrWhiteSpace(pythonPath))
         {
             return 0;
         }
@@ -367,44 +355,13 @@ public class ProcessService : IProcessService, IDisposable
         _lastPythonPath = pythonPath;
         _lastMainPath = mainPath;
 
-        return await Task.Run(() =>
-        {
-            var killed = 0;
-            foreach (var process in Process.GetProcessesByName("python"))
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
+        var cleanupResult = await CleanupMatchingComfyPythonProcessesAsync(
+            pythonPath,
+            TimeSpan.FromMilliseconds(LingeringProcessWaitTimeoutMs),
+            cancellationToken,
+            logWhenNoMatch: true);
 
-                try
-                {
-                    if (process.HasExited)
-                    {
-                        continue;
-                    }
-
-                    if (!IsTargetComfyPythonProcess(process, pythonPath, mainPath))
-                    {
-                        continue;
-                    }
-
-                    process.Kill();
-                    killed++;
-                    OutputReceived?.Invoke(this, $"[ProcessService] 启动前已清理残留进程 PID={process.Id}");
-                }
-                catch (Exception ex)
-                {
-                    _logService.LogError("启动前清理残留进程失败", ex);
-                }
-                finally
-                {
-                    process.Dispose();
-                }
-            }
-
-            return killed;
-        }, cancellationToken);
+        return cleanupResult.KilledCount;
     }
 
     /// <summary>
@@ -1190,38 +1147,115 @@ public class ProcessService : IProcessService, IDisposable
     }
 
     /// <summary>
-    /// 清理与最近一次启动配置匹配的残留 Python 进程。
+    /// 清理与指定 ComfyUI 路径匹配的残留 Python 进程，并等待其退出。
     /// </summary>
-    /// <returns>存在并清理成功时返回 true，否则返回 false。</returns>
-    private bool TryKillLingeringComfyPythonProcesses()
+    /// <param name="pythonPath">目标 Python 可执行文件路径。</param>
+    /// <param name="mainPath">目标 main.py 路径。</param>
+    /// <param name="waitTimeout">等待退出的最长时间。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="logWhenNoMatch">是否在未发现匹配进程时记录信息日志。</param>
+    /// <returns>清理结果。</returns>
+    private async Task<CleanupResult> CleanupMatchingComfyPythonProcessesAsync(
+        string? pythonPath,
+        TimeSpan waitTimeout,
+        CancellationToken cancellationToken,
+        bool logWhenNoMatch)
     {
-        if (string.IsNullOrWhiteSpace(_lastPythonPath) || string.IsNullOrWhiteSpace(_lastMainPath))
+        if (string.IsNullOrWhiteSpace(pythonPath))
         {
-            return false;
+            return new CleanupResult(0, true);
         }
 
-        var killedAny = false;
+        _logService.Log("开始检查残留 ComfyUI Python 进程（按 python.exe 路径匹配）。", GUILogLevel.Info);
+        TraceCleanupDetail($"清理目标 Python={pythonPath}");
+
+        var matchedProcesses = new List<TargetComfyProcess>();
+
         foreach (var process in Process.GetProcessesByName("python"))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 if (process.HasExited)
                 {
+                    process.Dispose();
                     continue;
                 }
 
-                if (!IsTargetComfyPythonProcess(process, _lastPythonPath, _lastMainPath))
+                var processPath = process.MainModule?.FileName;
+                if (!IsTargetComfyPythonProcess(processPath, pythonPath))
                 {
+                    process.Dispose();
                     continue;
                 }
 
-                process.Kill();
-                killedAny = true;
-                OutputReceived?.Invoke(this, $"[ProcessService] 已清理残留 Python 进程 PID={process.Id}");
+                matchedProcesses.Add(new TargetComfyProcess(process, processPath ?? string.Empty));
             }
             catch (Exception ex)
             {
-                _logService.LogError("清理残留 Python 进程失败", ex);
+                _logService.LogError("检测残留 ComfyUI Python 进程失败", ex);
+                process.Dispose();
+            }
+        }
+
+        if (matchedProcesses.Count == 0)
+        {
+            if (logWhenNoMatch)
+            {
+                _logService.Log("未检测到匹配的残留 ComfyUI Python 进程，继续启动。", GUILogLevel.Info);
+            }
+
+            return new CleanupResult(0, true);
+        }
+
+        _logService.Log($"检测到 {matchedProcesses.Count} 个匹配的残留 ComfyUI Python 进程，开始强制清理。", GUILogLevel.Warning);
+
+        var killedCount = 0;
+        var completed = true;
+
+        foreach (var target in matchedProcesses)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var process = target.Process;
+            var processId = process.Id;
+
+            try
+            {
+                TraceCleanupDetail($"匹配残留进程 PID={processId}, Path={target.ProcessPath}");
+                _logService.Log($"正在强制结束残留进程 PID={processId}", GUILogLevel.Warning);
+
+                if (!process.HasExited)
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch (InvalidOperationException) when (process.HasExited)
+                    {
+                        // 进程在强杀前已经退出，继续按已退出处理
+                    }
+                }
+
+                _logService.Log($"等待残留进程退出 PID={processId}（最多 {Math.Max(1, (int)waitTimeout.TotalSeconds)} 秒）", GUILogLevel.Info);
+                var exited = await WaitForProcessExitAsync(process, waitTimeout, cancellationToken);
+                TraceCleanupDetail($"等待退出结果 PID={processId}, Exited={exited}");
+
+                if (!exited)
+                {
+                    completed = false;
+                    _logService.Log($"残留进程等待退出超时 PID={processId}", GUILogLevel.Warning);
+                    continue;
+                }
+
+                killedCount++;
+                _logService.Log($"残留进程已退出 PID={processId}", GUILogLevel.Success);
+            }
+            catch (Exception ex)
+            {
+                completed = false;
+                _logService.LogError($"强制清理残留进程失败 PID={processId}", ex);
             }
             finally
             {
@@ -1229,7 +1263,16 @@ public class ProcessService : IProcessService, IDisposable
             }
         }
 
-        return killedAny;
+        if (completed)
+        {
+            _logService.Log("残留进程清理完成，继续启动 ComfyUI。", GUILogLevel.Success);
+        }
+        else
+        {
+            _logService.Log("残留进程未能全部清理完成，本次启动已取消。", GUILogLevel.Warning);
+        }
+
+        return new CleanupResult(killedCount, completed);
     }
 
     /// <summary>
@@ -1237,111 +1280,88 @@ public class ProcessService : IProcessService, IDisposable
     /// </summary>
     /// <param name="process">待检查进程。</param>
     /// <param name="pythonPath">目标 Python 可执行文件路径。</param>
-    /// <param name="mainPath">目标 main.py 路径。</param>
     /// <returns>匹配时返回 true，否则返回 false。</returns>
-    private bool IsTargetComfyPythonProcess(Process process, string pythonPath, string mainPath)
+    private bool IsTargetComfyPythonProcess(Process process, string pythonPath)
     {
         var processPath = process.MainModule?.FileName;
-        if (string.IsNullOrWhiteSpace(processPath))
-        {
-            return false;
-        }
-
-        if (!string.Equals(processPath, pythonPath, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var commandLine = TryGetProcessCommandLine(process.Id);
-        if (string.IsNullOrWhiteSpace(commandLine))
-        {
-            return false;
-        }
-
-        return IsMainScriptArgumentMatch(commandLine, mainPath) &&
-               commandLine.Contains("--windows-standalone-build", StringComparison.OrdinalIgnoreCase);
+        return IsTargetComfyPythonProcess(processPath, pythonPath);
     }
 
     /// <summary>
-    /// 查找是否已有相同 Python 与 main.py 组合的 ComfyUI 进程在运行。
+    /// 判断指定 Python 进程路径是否属于当前 ComfyUI 副本。
     /// </summary>
+    /// <param name="processPath">进程可执行文件路径。</param>
     /// <param name="pythonPath">目标 Python 可执行文件路径。</param>
-    /// <param name="mainPath">目标 main.py 路径。</param>
-    /// <returns>找到时返回进程对象，否则返回 null。</returns>
-    private Process? FindExistingComfyProcess(string pythonPath, string mainPath)
-    {
-        foreach (var process in Process.GetProcessesByName("python"))
-        {
-            var shouldDispose = true;
-            try
-            {
-                if (process.HasExited)
-                {
-                    continue;
-                }
-
-                if (IsTargetComfyPythonProcess(process, pythonPath, mainPath))
-                {
-                    shouldDispose = false;
-                    return process;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logService.LogError("检测已运行 ComfyUI 进程失败", ex);
-            }
-            
-            if (shouldDispose)
-            {
-                process.Dispose();
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// 判断命令行中是否包含目标 main.py 路径参数。
-    /// </summary>
-    /// <param name="commandLine">进程命令行文本。</param>
-    /// <param name="mainPath">目标 main.py 路径。</param>
     /// <returns>匹配时返回 true，否则返回 false。</returns>
-    private static bool IsMainScriptArgumentMatch(string commandLine, string mainPath)
+    internal static bool IsTargetComfyPythonProcess(string? processPath, string pythonPath)
     {
-        if (string.IsNullOrWhiteSpace(commandLine) || string.IsNullOrWhiteSpace(mainPath))
+        if (string.IsNullOrWhiteSpace(processPath) || string.IsNullOrWhiteSpace(pythonPath))
         {
             return false;
         }
 
-        // 严格匹配 `-s <main.py>` 参数，允许 main.py 带或不带引号
-        var escapedMainPath = Regex.Escape(mainPath);
-        var pattern = $@"(?:^|\s)-s\s+""?{escapedMainPath}""?(?:\s|$)";
-        return Regex.IsMatch(commandLine, pattern, RegexOptions.IgnoreCase);
+        return AreSameExecutablePath(processPath, pythonPath);
     }
 
     /// <summary>
-    /// 读取指定进程的完整命令行。
+    /// 判断两个 Python 可执行文件路径是否指向同一份文件。
     /// </summary>
-    /// <param name="processId">进程标识。</param>
-    /// <returns>命令行文本；读取失败时返回 null。</returns>
-    private string? TryGetProcessCommandLine(int processId)
+    /// <param name="leftPath">左侧路径。</param>
+    /// <param name="rightPath">右侧路径。</param>
+    /// <returns>路径相同则返回 true，否则返回 false。</returns>
+    internal static bool AreSameExecutablePath(string? leftPath, string? rightPath)
     {
+        if (string.IsNullOrWhiteSpace(leftPath) || string.IsNullOrWhiteSpace(rightPath))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            Path.GetFullPath(leftPath.Trim().Trim('"')),
+            Path.GetFullPath(rightPath.Trim().Trim('"')),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 等待指定进程退出。
+    /// </summary>
+    /// <param name="process">目标进程。</param>
+    /// <param name="timeout">等待超时时长。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>进程退出时返回 true，否则返回 false。</returns>
+    private static async Task<bool> WaitForProcessExitAsync(Process process, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        if (process.HasExited)
+        {
+            return true;
+        }
+
+        if (timeout <= TimeSpan.Zero)
+        {
+            return process.HasExited;
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {processId}");
-            foreach (var item in searcher.Get())
-            {
-                using var processObject = (ManagementObject)item;
-                return processObject["CommandLine"]?.ToString();
-            }
+            await process.WaitForExitAsync(timeoutCts.Token);
+            return true;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            _logService.LogError($"读取进程命令行失败 PID={processId}", ex);
+            return process.HasExited;
         }
+    }
 
-        return null;
+    /// <summary>
+    /// 输出残留进程清理的调试细节。
+    /// </summary>
+    /// <param name="message">调试信息。</param>
+    private static void TraceCleanupDetail(string message)
+    {
+        Debug.WriteLine($"[ProcessService] {message}");
     }
 
     /// <summary>
@@ -1365,4 +1385,18 @@ public class ProcessService : IProcessService, IDisposable
 
         return null;
     }
+
+    /// <summary>
+    /// 清理结果。
+    /// </summary>
+    /// <param name="KilledCount">已成功退出的匹配进程数量。</param>
+    /// <param name="Completed">是否全部完成清理。</param>
+    private sealed record CleanupResult(int KilledCount, bool Completed);
+
+    /// <summary>
+    /// 匹配到的残留进程快照。
+    /// </summary>
+    /// <param name="Process">进程对象。</param>
+    /// <param name="ProcessPath">进程可执行文件路径。</param>
+    private sealed record TargetComfyProcess(Process Process, string ProcessPath);
 }

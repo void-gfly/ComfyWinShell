@@ -62,6 +62,29 @@ public sealed class ProcessServiceTests
         Assert.False(started);
     }
 
+    [Fact]
+    public void AreSameExecutablePath_ReturnsTrue_ForSameFileWithDifferentFormatting()
+    {
+        var pythonPath = @"C:\ComfyShell\ComfyUI\python_embeded\python.exe";
+        var quotedPath = $"\"{pythonPath}\"";
+
+        var matched = ProcessService.AreSameExecutablePath(quotedPath, pythonPath);
+
+        Assert.True(matched);
+    }
+
+    [Theory]
+    [InlineData(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe", @"C:\Other\ComfyUI\python_embeded\python.exe")]
+    [InlineData(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe", @"C:\ComfyShell\ComfyUI\python.exe")]
+    public void IsTargetComfyPythonProcess_ReturnsFalse_WhenExecutablePathDiffers(
+        string processPath,
+        string pythonPath)
+    {
+        var matched = ProcessService.IsTargetComfyPythonProcess(processPath, pythonPath);
+
+        Assert.False(matched);
+    }
+
     private static T GetPrivateField<T>(object instance, string fieldName)
     {
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);

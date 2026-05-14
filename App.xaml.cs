@@ -67,8 +67,8 @@ namespace WpfDesktop
                 // 应用退出时优先停止 ComfyUI，并强制执行一次残留进程清理
                 try
                 {
-                    var processService = _host.Services.GetRequiredService<IProcessService>();
-                    processService.StopAsync().Wait(TimeSpan.FromSeconds(3));
+                var processService = _host.Services.GetRequiredService<IProcessService>();
+                processService.StopAsync().Wait(TimeSpan.FromSeconds(3));
 
                     var comfyPathService = _host.Services.GetRequiredService<IComfyPathService>();
                     comfyPathService.Refresh();
@@ -232,8 +232,8 @@ namespace WpfDesktop
                     services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();
                     services.AddSingleton<IResourceService, ResourceService>();
                     services.AddSingleton<IEnvironmentCheckService, EnvironmentCheckService>();
-                    services.AddSingleton<IWorkflowAnalyzerService, WorkflowAnalyzerService>();
-                    services.AddSingleton<IWorkflowPackagerService, WorkflowPackagerService>();
+                services.AddSingleton<IWorkflowAnalyzerService, WorkflowAnalyzerService>();
+                services.AddSingleton<IWorkflowPackagerService, WorkflowPackagerService>();
 
                     services.AddSingleton<DashboardViewModel>();
                     services.AddSingleton<ConfigurationViewModel>();

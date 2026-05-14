@@ -32,7 +32,6 @@ public partial class MainViewModel : ViewModelBase
 
     private string _activeProfileId = DefaultProfileId;
     private ComfyConfiguration? _currentConfiguration;
-    private bool _startupCleanupCompleted;
     private bool _startupExtraModelYamlSynced;
     private bool _startupBannerLogged;
 
@@ -227,17 +226,6 @@ public partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(OpenWebPageToolTip));
             OnPropertyChanged(nameof(CurrentEndpointText));
             OnPropertyChanged(nameof(CurrentPortText));
-
-            if (!_startupCleanupCompleted && _comfyPathService.IsValid && !string.IsNullOrWhiteSpace(_comfyPathService.ComfyRootPath))
-            {
-                var killed = await _processService.CleanupLingeringProcessesAsync(_comfyPathService.ComfyRootPath);
-                _startupCleanupCompleted = true;
-                if (killed > 0)
-                {
-                    StatusMessage = $"启动前已清理 {killed} 个残留 ComfyUI 进程";
-                    _ = Task.Delay(3000).ContinueWith(_ => RunOnUiThread(() => StatusMessage = string.Empty));
-                }
-            }
 
             if (!_startupExtraModelYamlSynced && _comfyPathService.IsValid)
             {
