@@ -11,11 +11,13 @@ public class HardwareMonitorService : IHardwareMonitorService
 {
     private HwInfo? _hwInfo;
     private readonly ICudaDeviceDiscoveryService _cudaDeviceDiscoveryService;
+    private readonly ILogService _logService;
     private bool _initialized;
 
-    public HardwareMonitorService(ICudaDeviceDiscoveryService cudaDeviceDiscoveryService)
+    public HardwareMonitorService(ICudaDeviceDiscoveryService cudaDeviceDiscoveryService, ILogService logService)
     {
         _cudaDeviceDiscoveryService = cudaDeviceDiscoveryService;
+        _logService = logService;
     }
 
     public bool IsAvailable => _hwInfo != null;
@@ -53,10 +55,11 @@ public class HardwareMonitorService : IHardwareMonitorService
 
         try
         {
-            _hwInfo = new HwInfo();
+            _hwInfo = new HwInfo(_logService);
         }
         catch (Exception ex)
         {
+            _logService.LogError("初始化硬件监控库失败", ex);
             Debug.WriteLine($"硬件监控初始化失败: {ex.Message}");
             _hwInfo = null;
         }

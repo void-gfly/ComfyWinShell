@@ -565,7 +565,7 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     {
         var pythonExe = ResolveStartupPythonExecutable(pythonPath, comfyRootPath);
         var comfyGitPath = ResolveComfyGitDirectory(comfyRootPath);
-        var (cpuInfo, cpuMemoryInfo, gpuInfoFromHw, gpuMemoryInfo) = await GetHardwareInfoFromHwModuleAsync(cancellationToken);
+        var (cpuInfo, cpuMemoryInfo, gpuInfoFromHw, gpuMemoryInfo) = await GetHardwareInfoFromHwModuleAsync(pythonExe, cancellationToken);
 
         // 并行执行所有外部命令
         var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
@@ -592,7 +592,7 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
             ? FirstNonEmptyLine(comfyOut)
             : "未知";
         var comfyPath = !string.IsNullOrWhiteSpace(comfyRootPath) ? comfyRootPath : "未配置";
-        var gpuInfo = string.IsNullOrWhiteSpace(gpuInfoFromHw) ? await DetectGpuViaPyTorchAsync(pythonExe, cancellationToken) : gpuInfoFromHw;
+        var gpuInfo = gpuInfoFromHw;
 
         var separator = "========================================";
         _logService.Log(separator);
@@ -613,18 +613,25 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
     /// <summary>
     /// 从硬件监控模块提取 CPU、内存与 GPU 摘要信息。
     /// </summary>
+    /// <param name="pythonExe">Python 可执行文件路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>CPU 信息、内存占用、GPU 信息和显存占用组成的元组。</returns>
     private async Task<(string cpuInfo, string cpuMemoryInfo, string gpuInfo, string gpuMemoryInfo)> GetHardwareInfoFromHwModuleAsync(
+        string pythonExe,
         CancellationToken cancellationToken)
     {
         var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot(), cancellationToken);
 
         var cpuInfo = string.IsNullOrWhiteSpace(snapshot.CpuName) ? "未知 CPU" : snapshot.CpuName;
         var cpuMemoryInfo = FormatUsage(snapshot.MemoryUsedMb, snapshot.MemoryTotalMb);
-        if (snapshot.Gpus.Count == 0)
-        {
-            return (cpuInfo, cpuMemoryInfo, "未检测到 GPU", "未知");
-        }
+        var gpuMemoryInfo = snapshot.Gpus.Count == 0
+            ? "未知"
+            : string.Join(" | ", snapshot.Gpus
+                .Select(g =>
+                {
+                    var name = string.IsNullOrWhiteSpace(g.Name) ? "GPU" : g.Name.Trim();
+                    return $"{name}: {FormatUsage(g.MemoryUsedMb, g.MemoryTotalMb)}";
+                }));
 
         var gpuNames = snapshot.Gpus
             .Select(g => g.Name?.Trim())
@@ -632,16 +639,10 @@ public sealed class EnvironmentCheckService : IEnvironmentCheckService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var gpuMemoryInfo = string.Join(" | ", snapshot.Gpus
-            .Select(g =>
-            {
-                var name = string.IsNullOrWhiteSpace(g.Name) ? "GPU" : g.Name.Trim();
-                return $"{name}: {FormatUsage(g.MemoryUsedMb, g.MemoryTotalMb)}";
-            }));
-
         if (gpuNames.Length == 0)
         {
-            return (cpuInfo, cpuMemoryInfo, "未检测到 GPU", gpuMemoryInfo);
+            var gpuInfo = await DetectGpuViaPyTorchAsync(pythonExe, cancellationToken);
+            return (cpuInfo, cpuMemoryInfo, gpuInfo, gpuMemoryInfo);
         }
 
         return (cpuInfo, cpuMemoryInfo, string.Join(" | ", gpuNames), gpuMemoryInfo);
