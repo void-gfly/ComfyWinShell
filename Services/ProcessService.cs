@@ -23,6 +23,8 @@ public class ProcessService : IProcessService, IDisposable
     private const int WebSocketReconnectDelayMs = 2000;
     private const int WebSocketInitialConnectDelayMs = 6000;
     private const int LingeringProcessWaitTimeoutMs = 5000;
+    private static readonly Encoding StrictUtf8Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static readonly Encoding LocalAnsiOutputEncoding;
 
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IPythonPathService _pythonPathService;
@@ -52,6 +54,7 @@ public class ProcessService : IProcessService, IDisposable
     static ProcessService()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        LocalAnsiOutputEncoding = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
     }
 
     /// <summary>
@@ -218,39 +221,13 @@ public class ProcessService : IProcessService, IDisposable
                 EnableRaisingEvents = true
             };
 
-            _process.OutputDataReceived += (_, e) =>
-            {
-                if (!string.IsNullOrWhiteSpace(e.Data))
-                {
-                    var line = DecodeUnicodeEscapes(e.Data);
-                    lock (_statusLock)
-                    {
-                        _status.OutputLogs.Add(line);
-                    }
-                    PublishComfyOutput(line);
-                }
-            };
-
-            _process.ErrorDataReceived += (_, e) =>
-            {
-                if (!string.IsNullOrWhiteSpace(e.Data))
-                {
-                    var line = DecodeUnicodeEscapes(e.Data);
-                    lock (_statusLock)
-                    {
-                        _status.OutputLogs.Add(line);
-                    }
-                    PublishComfyOutput(line);
-                }
-            };
-
             _process.Exited += OnProcessExited;
 
             var started = _process.Start();
             if (started)
             {
-                _process.BeginOutputReadLine();
-                _process.BeginErrorReadLine();
+                _ = ReadComfyOutputAsync(_process.StandardOutput.BaseStream);
+                _ = ReadComfyOutputAsync(_process.StandardError.BaseStream);
                 lock (_statusLock)
                 {
                     _status.State = ProcessState.Running;
@@ -1045,7 +1022,6 @@ public class ProcessService : IProcessService, IDisposable
         _lastMainPath = mainPath;
 
         var argsStr = string.IsNullOrWhiteSpace(arguments) ? "" : $" {arguments}";
-        var outputEncoding = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
         var startInfo = new ProcessStartInfo
         {
             FileName = pythonPath,
@@ -1054,13 +1030,144 @@ public class ProcessService : IProcessService, IDisposable
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardOutputEncoding = outputEncoding,
-            StandardErrorEncoding = outputEncoding,
             CreateNoWindow = true
         };
 
         _proxyService.ConfigureProcessProxy(startInfo);
+        startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
         return startInfo;
+    }
+
+    /// <summary>
+    /// 读取 ComfyUI 输出的原始字节，并按输出段落选择合适编码。
+    /// </summary>
+    /// <param name="stream">stdout 或 stderr 的原始流。</param>
+    private async Task ReadComfyOutputAsync(Stream stream)
+    {
+        var buffer = new byte[4096];
+        var lineBytes = new List<byte>(4096);
+        var previousWasCarriageReturn = false;
+
+        try
+        {
+            while (true)
+            {
+                var bytesRead = await stream.ReadAsync(buffer);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                for (var i = 0; i < bytesRead; i++)
+                {
+                    var current = buffer[i];
+                    if (current == '\r' || current == '\n')
+                    {
+                        if (current == '\n' && previousWasCarriageReturn && lineBytes.Count == 0)
+                        {
+                            previousWasCarriageReturn = false;
+                            continue;
+                        }
+
+                        PublishComfyOutputBytes(lineBytes);
+                        lineBytes.Clear();
+                        previousWasCarriageReturn = current == '\r';
+                        continue;
+                    }
+
+                    previousWasCarriageReturn = false;
+                    lineBytes.Add(current);
+                }
+            }
+
+            PublishComfyOutputBytes(lineBytes);
+        }
+        catch (ObjectDisposedException)
+        {
+            // 进程退出时流可能已被释放，输出读取随进程生命周期自然结束。
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("读取 ComfyUI 输出失败", ex);
+        }
+    }
+
+    /// <summary>
+    /// 解码并发布一段 ComfyUI 输出。
+    /// </summary>
+    /// <param name="bytes">一段未包含换行符的输出字节。</param>
+    private void PublishComfyOutputBytes(List<byte> bytes)
+    {
+        if (bytes.Count == 0)
+        {
+            return;
+        }
+
+        var line = DecodeComfyOutputBytes(bytes.ToArray());
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        lock (_statusLock)
+        {
+            _status.OutputLogs.Add(line);
+        }
+
+        PublishComfyOutput(line);
+    }
+
+    /// <summary>
+    /// 解码 ComfyUI 输出字节：优先 UTF-8，失败时回退到当前 Windows ANSI 代码页。
+    /// </summary>
+    /// <param name="bytes">原始输出字节。</param>
+    /// <returns>解码后的文本。</returns>
+    internal static string DecodeComfyOutputBytes(byte[] bytes)
+    {
+        if (bytes.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return NormalizeComfyOutputText(StrictUtf8Encoding.GetString(bytes));
+        }
+        catch (DecoderFallbackException)
+        {
+            return NormalizeComfyOutputText(LocalAnsiOutputEncoding.GetString(bytes));
+        }
+    }
+
+    /// <summary>
+    /// 归一化 ComfyUI 输出文本，修复常见的 UTF-8 内容被 ANSI 误解码后的显示乱码。
+    /// </summary>
+    /// <param name="text">已解码的输出文本。</param>
+    /// <returns>适合 UI 显示的文本。</returns>
+    private static string NormalizeComfyOutputText(string text)
+    {
+        var normalized = DecodeUnicodeEscapes(text);
+        if (!ContainsAnsiMojibakeMarker(normalized))
+        {
+            return normalized;
+        }
+
+        return normalized
+            .Replace("鈿狅笍", "⚠️", StringComparison.Ordinal)
+            .Replace("鈹斺攢", "└─", StringComparison.Ordinal)
+            .Replace("鈻堚枅", "██", StringComparison.Ordinal)
+            .Replace("鈿", "⚠", StringComparison.Ordinal)
+            .Replace("鈻", "█", StringComparison.Ordinal);
+    }
+
+    private static bool ContainsAnsiMojibakeMarker(string text)
+    {
+        return text.Contains('鈻', StringComparison.Ordinal)
+            || text.Contains('鈹', StringComparison.Ordinal)
+            || text.Contains('鈿', StringComparison.Ordinal)
+            || text.Contains('堚', StringComparison.Ordinal)
+            || text.Contains('枅', StringComparison.Ordinal)
+            || text.Contains('攢', StringComparison.Ordinal);
     }
 
     /// <summary>

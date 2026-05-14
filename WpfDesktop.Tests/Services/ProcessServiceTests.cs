@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using WpfDesktop.Models;
 using WpfDesktop.Services;
@@ -132,7 +132,7 @@ public sealed class ProcessServiceTests
     }
 
     [Fact]
-    public void BuildStartInfo_DoesNotForceUtf8PythonEnvironment_ForComfyUiLaunch()
+    public void BuildStartInfo_UsesUtf8StandardIoWithoutEnablingPythonUtf8Mode_ForComfyUiLaunch()
     {
         using var tempRoot = new TempComfyRoot();
         var comfyCorePath = Path.Combine(tempRoot.RootPath, "ComfyUI");
@@ -149,11 +149,11 @@ public sealed class ProcessServiceTests
 
         Assert.NotNull(startInfo);
         Assert.False(startInfo!.EnvironmentVariables.ContainsKey("PYTHONUTF8"));
-        Assert.False(startInfo.EnvironmentVariables.ContainsKey("PYTHONIOENCODING"));
+        Assert.Equal("utf-8", startInfo.EnvironmentVariables["PYTHONIOENCODING"]);
     }
 
     [Fact]
-    public void BuildStartInfo_UsesCurrentAnsiCodePage_ForComfyUiOutput()
+    public void BuildStartInfo_DoesNotSetFixedOutputEncoding_ForRawComfyUiOutputReader()
     {
         using var tempRoot = new TempComfyRoot();
         var comfyCorePath = Path.Combine(tempRoot.RootPath, "ComfyUI");
@@ -169,8 +169,50 @@ public sealed class ProcessServiceTests
         var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
 
         Assert.NotNull(startInfo);
-        Assert.Equal(CultureInfo.CurrentCulture.TextInfo.ANSICodePage, startInfo!.StandardOutputEncoding?.CodePage);
-        Assert.Equal(CultureInfo.CurrentCulture.TextInfo.ANSICodePage, startInfo.StandardErrorEncoding?.CodePage);
+        Assert.Null(startInfo!.StandardOutputEncoding);
+        Assert.Null(startInfo.StandardErrorEncoding);
+    }
+
+    [Fact]
+    public void DecodeComfyOutputBytes_PrefersUtf8_ForUnicodeProgressBars()
+    {
+        var bytes = Encoding.UTF8.GetBytes(" 50%|██▌     | 2/4");
+
+        var decoded = ProcessService.DecodeComfyOutputBytes(bytes);
+
+        Assert.Equal(" 50%|██▌     | 2/4", decoded);
+    }
+
+    [Fact]
+    public void DecodeComfyOutputBytes_FallsBackToCurrentAnsiCodePage_ForLocalProcessOutput()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var ansiEncoding = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        var bytes = ansiEncoding.GetBytes("远程主机强迫关闭了一个现有的连接。");
+
+        var decoded = ProcessService.DecodeComfyOutputBytes(bytes);
+
+        Assert.Equal("远程主机强迫关闭了一个现有的连接。", decoded);
+    }
+
+    [Fact]
+    public void DecodeComfyOutputBytes_RepairsUtf8TextAlreadyMojibakedAsAnsi_ForProgressBars()
+    {
+        var bytes = Encoding.UTF8.GetBytes(" 50%|鈻堚枅鈻堚枅鈻     | 2/4");
+
+        var decoded = ProcessService.DecodeComfyOutputBytes(bytes);
+
+        Assert.Equal(" 50%|█████     | 2/4", decoded);
+    }
+
+    [Fact]
+    public void DecodeComfyOutputBytes_RepairsUtf8TextAlreadyMojibakedAsAnsi_ForBoxDrawingIcons()
+    {
+        var bytes = Encoding.UTF8.GetBytes("[06:26:30.157] 鈿     鈹斺攢 VAE weights loaded");
+
+        var decoded = ProcessService.DecodeComfyOutputBytes(bytes);
+
+        Assert.Equal("[06:26:30.157] ⚠     └─ VAE weights loaded", decoded);
     }
 
     [Theory]
