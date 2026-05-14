@@ -64,6 +64,62 @@ public sealed class ProcessServiceTests
     }
 
     [Fact]
+    public async Task StartAsync_CreatesDefaultAndConfiguredInputOutputTempDirectoriesBeforePythonResolutionCompletes()
+    {
+        using var tempRoot = new TempComfyRoot();
+        var comfyCorePath = Path.Combine(tempRoot.RootPath, "ComfyUI");
+        Directory.CreateDirectory(comfyCorePath);
+        File.WriteAllText(Path.Combine(comfyCorePath, "main.py"), "print('ok')");
+
+        var customInputDirectory = Path.Combine(tempRoot.RootPath, "custom", "input");
+        var customOutputDirectory = Path.Combine(tempRoot.RootPath, "custom", "output");
+        var customTempDirectory = Path.Combine(tempRoot.RootPath, "custom", "temp");
+
+        using var resolveEntered = new ManualResetEventSlim(false);
+        using var releaseResolve = new ManualResetEventSlim(false);
+
+        var pythonPathService = new BlockingPythonPathService(resolveEntered, releaseResolve);
+        using var service = new ProcessService(
+            new ArgumentBuilder(),
+            pythonPathService,
+            new FakeProxyService(),
+            new FakeLogService());
+
+        var configuration = new ComfyConfiguration
+        {
+            Paths =
+            {
+                InputDirectory = customInputDirectory,
+                OutputDirectory = customOutputDirectory,
+                TempDirectory = customTempDirectory
+            }
+        };
+
+        var startTask = Task.Factory.StartNew(
+            () => service.StartAsync(tempRoot.RootPath, configuration),
+            CancellationToken.None,
+            TaskCreationOptions.None,
+            TaskScheduler.Default);
+
+        Assert.True(resolveEntered.Wait(TimeSpan.FromSeconds(1)));
+
+        var defaultDirectory = comfyCorePath;
+        Assert.True(Directory.Exists(Path.Combine(defaultDirectory, "input")));
+        Assert.True(Directory.Exists(Path.Combine(defaultDirectory, "output")));
+        Assert.True(Directory.Exists(Path.Combine(defaultDirectory, "temp")));
+        Assert.True(Directory.Exists(customInputDirectory));
+        Assert.True(Directory.Exists(customOutputDirectory));
+        Assert.True(Directory.Exists(customTempDirectory));
+
+        releaseResolve.Set();
+
+        var innerTask = await startTask;
+        var started = await innerTask;
+
+        Assert.False(started);
+    }
+
+    [Fact]
     public void AreSameExecutablePath_ReturnsTrue_ForSameFileWithDifferentFormatting()
     {
         var pythonPath = @"C:\ComfyShell\ComfyUI\python_embeded\python.exe";
@@ -149,8 +205,6 @@ public sealed class ProcessServiceTests
             _releaseResolve = releaseResolve;
         }
 
-        public string? PythonPath => Path.Combine(Path.GetTempPath(), "python.exe");
-
         public bool IsValid => true;
 
         public void Resolve(string comfyRootPath)
@@ -158,6 +212,8 @@ public sealed class ProcessServiceTests
             _resolveEntered.Set();
             _releaseResolve.Wait(TimeSpan.FromSeconds(5));
         }
+
+        public string? PythonPath => null;
     }
 
     private sealed class TempComfyRoot : IDisposable

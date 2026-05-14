@@ -169,6 +169,8 @@ public class ProcessService : IProcessService, IDisposable
                 return false;
             }
 
+            EnsureStartupDirectories(comfyRootPath, configuration);
+
             var arguments = _argumentBuilder.BuildArguments(configuration);
             var startInfo = BuildStartInfo(comfyRootPath, arguments);
             if (startInfo == null)
@@ -1053,6 +1055,39 @@ public class ProcessService : IProcessService, IDisposable
 
         _proxyService.ConfigureProcessProxy(startInfo);
         return startInfo;
+    }
+
+    /// <summary>
+    /// 在启动前补齐 ComfyUI 默认目录和用户配置的目录。
+    /// </summary>
+    /// <param name="comfyRootPath">ComfyUI 根目录。</param>
+    /// <param name="configuration">启动配置。</param>
+    private static void EnsureStartupDirectories(string comfyRootPath, ComfyConfiguration configuration)
+    {
+        var mainPath = ResolveMainPath(comfyRootPath);
+        var mainDirectory = string.IsNullOrWhiteSpace(mainPath) ? null : Path.GetDirectoryName(mainPath);
+
+        if (!string.IsNullOrWhiteSpace(mainDirectory))
+        {
+            Directory.CreateDirectory(Path.Combine(mainDirectory, "input"));
+            Directory.CreateDirectory(Path.Combine(mainDirectory, "output"));
+            Directory.CreateDirectory(Path.Combine(mainDirectory, "temp"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuration.Paths.InputDirectory))
+        {
+            Directory.CreateDirectory(configuration.Paths.InputDirectory);
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuration.Paths.OutputDirectory))
+        {
+            Directory.CreateDirectory(configuration.Paths.OutputDirectory);
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuration.Paths.TempDirectory))
+        {
+            Directory.CreateDirectory(configuration.Paths.TempDirectory);
+        }
     }
 
     /// <summary>
