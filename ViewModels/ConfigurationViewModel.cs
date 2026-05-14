@@ -29,6 +29,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     private readonly List<INotifyPropertyChanged> _trackedNotifiers = new();
     private readonly List<INotifyCollectionChanged> _trackedCollections = new();
     private bool _isSyncingText;
+    private bool _isSyncingSelectedCudaDevice;
     private bool _isInstallingManager;
     private string _currentProfileId = DefaultProfileId;
 
@@ -55,8 +56,6 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
         Configuration = new ComfyConfiguration();
         AttachConfigurationHandlers(Configuration);
-
-        BackgroundTaskObserver.Observe(LoadDefaultAsync(), _logService, "加载默认配置");
     }
 
     public async Task OnNavigatedToAsync()
@@ -143,6 +142,11 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
     partial void OnSelectedCudaDeviceChanged(CudaDeviceOption? value)
     {
+        if (_isSyncingSelectedCudaDevice)
+        {
+            return;
+        }
+
         if (Configuration?.Device != null)
         {
             Configuration.Device.CudaDevice = value?.DeviceId;
@@ -392,14 +396,23 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     private void SyncSelectedCudaDevice()
     {
         var cudaDeviceId = Configuration?.Device?.CudaDevice;
-        if (cudaDeviceId.HasValue)
+
+        _isSyncingSelectedCudaDevice = true;
+        try
         {
-            SelectedCudaDevice = CudaDevices.FirstOrDefault(d => d.DeviceId == cudaDeviceId.Value)
-                                 ?? CudaDevices.FirstOrDefault(); // 找不到则选"未选择"
+            if (cudaDeviceId.HasValue)
+            {
+                SelectedCudaDevice = CudaDevices.FirstOrDefault(d => d.DeviceId == cudaDeviceId.Value)
+                                     ?? CudaDevices.FirstOrDefault(); // 找不到则选"未选择"
+            }
+            else
+            {
+                SelectedCudaDevice = CudaDevices.FirstOrDefault(); // 选"未选择"
+            }
         }
-        else
+        finally
         {
-            SelectedCudaDevice = CudaDevices.FirstOrDefault(); // 选"未选择"
+            _isSyncingSelectedCudaDevice = false;
         }
     }
 

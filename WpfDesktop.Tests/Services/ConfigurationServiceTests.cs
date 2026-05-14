@@ -67,6 +67,25 @@ public sealed class ConfigurationServiceTests : IDisposable
         Assert.Equal(existingPath, configuration.Paths.ExtraModelBaseDirectory);
     }
 
+    [Fact]
+    public async Task SaveAndLoadAsync_PreservesCudaDeviceSelection()
+    {
+        var service = CreateService();
+        var configuration = new ComfyConfiguration
+        {
+            Device = new DeviceConfiguration
+            {
+                CudaDevice = 1
+            }
+        };
+
+        await service.SaveConfigurationAsync("default", configuration);
+
+        var reloaded = await service.LoadConfigurationAsync("default");
+
+        Assert.Equal(1, reloaded.Device.CudaDevice);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))
