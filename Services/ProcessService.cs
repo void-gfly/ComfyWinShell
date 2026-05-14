@@ -1052,8 +1052,6 @@ public class ProcessService : IProcessService, IDisposable
         };
 
         _proxyService.ConfigureProcessProxy(startInfo);
-        startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
-        startInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
         return startInfo;
     }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
 using WpfDesktop.Models;
@@ -73,6 +74,27 @@ public sealed class ProcessServiceTests
         Assert.True(matched);
     }
 
+    [Fact]
+    public void BuildStartInfo_DoesNotForceUtf8PythonEnvironment_ForComfyUiLaunch()
+    {
+        using var tempRoot = new TempComfyRoot();
+        var comfyCorePath = Path.Combine(tempRoot.RootPath, "ComfyUI");
+        Directory.CreateDirectory(comfyCorePath);
+        File.WriteAllText(Path.Combine(comfyCorePath, "main.py"), "print('ok')");
+
+        using var service = new ProcessService(
+            new ArgumentBuilder(),
+            new FakePythonPathService(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe"),
+            new FakeProxyService(),
+            new FakeLogService());
+
+        var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
+
+        Assert.NotNull(startInfo);
+        Assert.False(startInfo!.EnvironmentVariables.ContainsKey("PYTHONUTF8"));
+        Assert.False(startInfo.EnvironmentVariables.ContainsKey("PYTHONIOENCODING"));
+    }
+
     [Theory]
     [InlineData(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe", @"C:\Other\ComfyUI\python_embeded\python.exe")]
     [InlineData(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe", @"C:\ComfyShell\ComfyUI\python.exe")]
@@ -92,11 +114,24 @@ public sealed class ProcessServiceTests
         return Assert.IsType<T>(field!.GetValue(instance));
     }
 
+    private static ProcessStartInfo? InvokeBuildStartInfo(ProcessService service, string comfyRootPath, string arguments)
+    {
+        var method = typeof(ProcessService).GetMethod("BuildStartInfo", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        return method!.Invoke(service, new object[] { comfyRootPath, arguments }) as ProcessStartInfo;
+    }
+
     private sealed class FakePythonPathService : IPythonPathService
     {
-        public string? PythonPath => null;
+        public string? PythonPath { get; }
 
         public bool IsValid => false;
+
+        public FakePythonPathService(string? pythonPath = null)
+        {
+            PythonPath = pythonPath;
+        }
 
         public void Resolve(string comfyRootPath)
         {
