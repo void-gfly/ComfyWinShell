@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>ComfyShell Release Notes</title>
+  <style>
+    :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --accent-1: #3b82f6;
+        --accent-2: #8b5cf6;
+        --accent-3: #ec4899;
+        --glass-bg: rgba(30, 41, 59, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.6;
+        overflow-x: hidden;
+        background-image: 
+            radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+        background-attachment: fixed;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes gradientFlow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* Header */
+    header {
+        padding: 0.5rem 5%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 10;
+        position: relative;
+    }
+
+    .logo {
+        font-size: 1.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.5px;
+    }
+
+    /* Main Container */
+    .shell {
+        width: min(1440px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 0 0 4rem;
+        animation: fadeIn 1s ease-out forwards;
+    }
+
+    /* Glass Card Base */
+    .glass-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        box-shadow: var(--glass-shadow);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .glass-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+        pointer-events: none;
+    }
+
+    /* Hero */
+    .hero {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 16px;
+        padding: 20px;
+        margin-bottom: 1rem;
+    }
+
+    .hero .eyebrow {
+        color: var(--accent-1);
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        margin-bottom: 0.2rem;
+    }
+
+    .hero h1 {
+        font-size: clamp(1.8rem, 3vw, 2.5rem);
+        font-weight: 800;
+        line-height: 1.1;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(270deg, var(--accent-1), var(--accent-2), var(--accent-3));
+        background-size: 200% 200%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: gradientFlow 5s ease infinite;
+    }
+
+    .hero .lead {
+        color: var(--text-secondary);
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .hero .legend {
+        padding: 1.2rem;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .hero .legend-title {
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+    
+    .hero .legend p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+    }
+
+    /* Stats */
+    .stats {
+        display: grid;
+        gap: 16px;
+        align-content: start;
+    }
+
+    .hero-card {
+        padding: 1.5rem;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-card .label { color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+    .hero-card .value { font-size: 2rem; font-weight: 800; color: var(--accent-1); }
+    .hero-card .sub { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem; }
+    .hero-card .sub code { background: rgba(0,0,0,0.3); padding: 0.2rem 0.4rem; border-radius: 4px; }
+
+    .hero-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .mini-stat {
+        padding: 1rem;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mini-stat .k { display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .mini-stat .v { display: block; color: var(--text-primary); font-size: 1.1rem; font-weight: 700; }
+
+    /* Layout */
+    .layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    /* TOC */
+    .toc {
+        position: sticky;
+        top: 1.5rem;
+        padding: 1.2rem;
+    }
+
+    .toc h2 { font-size: 1.2rem; margin-bottom: 0.5rem; color: var(--text-primary); }
+    .toc small { display: block; color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem; }
+    .toc-list { display: grid; gap: 8px; }
+
+    .toc-link {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.8rem 1rem;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+    }
+
+    .toc-link:hover {
+        background: rgba(255, 255, 255, 0.05);
+        transform: translateX(4px);
+    }
+
+    .toc-link.current {
+        background: rgba(59, 130, 246, 0.15);
+        border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    .toc-link strong { font-size: 0.95rem; color: var(--text-primary); }
+    .toc-link span { font-size: 0.85rem; color: var(--text-secondary); }
+
+    /* Content */
+    .content {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .section {
+        padding: 1.5rem;
+        scroll-margin-top: 1.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .section:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .section.current {
+        border-color: rgba(52, 211, 153, 0.3);
+        box-shadow: 0 10px 30px rgba(52, 211, 153, 0.1);
+    }
+
+    .section-head { margin-bottom: 1.5rem; }
+    .badge-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+
+    .badge {
+        padding: 0.3rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+    }
+
+    .badge.version { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+    .badge.source { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border-color: rgba(139, 92, 246, 0.3); }
+    .badge.latest { background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+
+    .section h3 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary); }
+    .section-meta { display: flex; gap: 1rem; color: var(--text-secondary); font-size: 0.9rem; }
+    .summary { color: var(--text-primary); font-size: 1rem; margin-bottom: 1rem; line-height: 1.6; }
+
+    .commit-list { list-style: none; display: grid; gap: 0.8rem; }
+
+    .commit-list li {
+        display: grid;
+        grid-template-columns: 80px 100px 1fr;
+        gap: 1rem;
+        padding: 1rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        align-items: start;
+        transition: background 0.2s;
+    }
+
+    .commit-list li:hover { background: rgba(255, 255, 255, 0.05); }
+
+    .commit-list code {
+        font-family: 'Consolas', monospace;
+        color: var(--accent-1);
+        font-size: 0.9rem;
+        background: rgba(59, 130, 246, 0.1);
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        text-align: center;
+        display: inline-block;
+    }
+
+    .commit-list time { color: var(--text-secondary); font-size: 0.85rem; }
+    .message { color: var(--text-primary); font-size: 0.95rem; }
+
+    @media (max-width: 1024px) {
+        .hero { grid-template-columns: 1fr; }
+        .layout { grid-template-columns: 1fr; }
+        .toc { position: static; }
+    }
+
+    @media (max-width: 640px) {
+        .commit-list li { grid-template-columns: 1fr; gap: 0.5rem; }
+        .commit-list code { display: inline; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="../about.html" class="logo">ComfyShell</a>
+  </header>
+
+  <main class="shell">
+    <section class="hero glass-card">
+      <div>
+        <p class="eyebrow">ComfyShell · Release Notes</p>
+        <h1>从创始阶段到 v1.2.0 的版本演进</h1>
+        <p class="lead">
+          这是根据仓库 git 历史整理的 release notes。v1.0.6 之前的早期提交统一归入
+          <strong>Pre-release</strong>，缺少独立版本号的提交则按时间线并入最近的版本段。
+        </p>
+        <div class="legend">
+          <div class="legend-title">分段规则</div>
+          <p>
+            优先使用 tag 或明确的版本 bump 作为版本锚点；仓库中没有独立的 v1.0.7 和 v1.1.2 版本标记，
+            相关提交并入相邻版本段。最新版本号来自 <code>WpfDesktop.csproj</code>。
+          </p>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="hero-card">
+          <p class="label">当前版本</p>
+          <p class="value" id="current-version">v1.2.0</p>
+          <p class="sub">来源：<code>WpfDesktop.csproj</code></p>
+        </div>
+        <div class="hero-grid">
+          <div class="mini-stat">
+            <span class="k">版本段</span>
+            <span class="v" id="version-count">8</span>
+          </div>
+          <div class="mini-stat">
+            <span class="k">提交总数</span>
+            <span class="v" id="commit-count">79</span>
+          </div>
+          <div class="mini-stat">
+            <span class="k">起始日期</span>
+            <span class="v" id="start-date">2026-01-14</span>
+          </div>
+          <div class="mini-stat">
+            <span class="k">最新日期</span>
+            <span class="v" id="end-date">2026-05-15</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <aside class="toc glass-card">
+        <h2>版本目录</h2>
+        <small>按时间线从晚到早排列</small>
+        <nav class="toc-list" id="toc"></nav>
+      </aside>
+
+      <div class="content" id="content"></div>
+    </section>
+  </main>
+
+  <script>
+    const sections = [
+      {
+        id: "pre-release",
+        version: "Pre-release",
+        title: "创始阶段",
+        source: "无独立版本号",
+        summary: "完成仓库骨架、基础界面、模型与网络能力的底座，建立后续版本的核心结构。",
+        commits: [
+          { hash: "4f1794b", date: "2026-01-14", message: `添加 .gitattributes、.gitignore 和 LICENSE.txt。` },
+          { hash: "8d8e21f", date: "2026-01-14", message: `添加项目文件。` },
+          { hash: "bbd38c6", date: "2026-01-14", message: `在 .gitignore 中添加 MigrationBackup/ 忽略规则` },
+          { hash: "ddcdd5a", date: "2026-01-14", message: `Refactor code structure for improved readability and maintainability` },
+          { hash: "67843b9", date: "2026-01-14", message: `Remove unnecessary image file: 2026-01-13 020004.png` },
+          { hash: "252495d", date: "2026-01-14", message: `Refactor code structure for improved readability and maintainability` },
+          { hash: "760d2fe", date: "2026-01-14", message: `更新 README.md 中的应用截图建议` },
+          { hash: "dc7e908", date: "2026-01-14", message: `新增网络加速与资源管理功能，优化设置体验` },
+          { hash: "001df41", date: "2026-01-14", message: `文档格式化与排版优化，提升可读性` },
+          { hash: "d1129ef", date: "2026-01-14", message: `新增扩展模型目录功能及配置管理样式优化` },
+          { hash: "f3670dc", date: "2026-01-14", message: `ComfyUI环境检测功能&日志系统升级&内存监控修复` },
+          { hash: "3ff53cd", date: "2026-01-14", message: `- ✅ 所有空 catch 块已替换为带日志记录的异常处理 - ✅ 所有 ILogService 依赖注入正确实现` },
+          { hash: "ea2be27", date: "2026-01-14", message: `引入ComfyUI工作流依赖分析功能` },
+          { hash: "69f8695", date: "2026-02-02", message: `连接后端超时异常不显示在日志，而是更新状态栏文字` },
+          { hash: "c274993", date: "2026-02-02", message: `超时异常不刷日志 错误对话框强化` },
+          { hash: "d09f52f", date: "2026-02-02", message: `新增工作流打包功能及相关服务` },
+          { hash: "5a54c1e", date: "2026-02-05", message: `Merge branch 'master' of https://github.com/void-gfly/ComfyWinShell` },
+          { hash: "2df381f", date: "2026-02-05", message: `设置界面UI重构&数据根路径解析统一` },
+          { hash: "9fe3dcd", date: "2026-02-05", message: `主窗口Logo与版本信息显示优化` },
+          { hash: "dc66f90", date: "2026-02-06", message: `增强模型依赖分析与界面，支持更多节点类型` },
+          { hash: "af96558", date: "2026-02-13", message: `修复关键功能并优化代码结构` },
+          { hash: "d6f1155", date: "2026-02-13", message: `删除不再使用的UI图像文件` },
+          { hash: "d2cd83f", date: "2026-02-13", message: `更新主窗口版本信息绑定，添加自动获取应用版本功能，并新增VSCode设置文件` },
+          { hash: "ba8a10b", date: "2026-02-14", message: `添加GPU和CPU状态监控功能，优化主窗口显示` },
+          { hash: "dd05e34", date: "2026-02-14", message: `更新.gitignore以排除.vscode目录，添加VSCode终端配置到settings.json` },
+          { hash: "adcf667", date: "2026-02-15", message: `优化内存使用率获取方式，提升准确性` },
+          { hash: "7602577", date: "2026-02-16", message: `全局异常处理与日志行高配置功能增强` },
+          { hash: "aeebe31", date: "2026-02-18", message: `支持扩展模型目录并优化缺失模型打包体验` }
+        ]
+      },
+      {
+        id: "v1-0-6",
+        version: "v1.0.6",
+        title: "发布准备与路径/打包收口",
+        source: "tag: v1.0.6",
+        summary: "围绕发布外观、路径配置、打包链路和 ComfyUI 进程复用做了第一轮收口。",
+        commits: [
+          { hash: "17ced3a", date: "2026-02-19", message: `环境检测横幅与Dashboard按钮样式优化` },
+          { hash: "54cda7e", date: "2026-02-19", message: `更新 .gitignore，新增 .vscode/ 和 ComfyShell 压缩包` },
+          { hash: "3702e14", date: "2026-02-19", message: `新增“亮点功能”板块，突出核心特色` },
+          { hash: "457ca28", date: "2026-02-19", message: `新增 .gitignore 规则以忽略 .zip 文件` },
+          { hash: "dc2b203", date: "2026-02-19", message: `固定 WebUiBaseUrl 的 IP 地址为 127.0.0.1` },
+          { hash: "b74b749", date: "2026-03-16", message: `优化路径解析逻辑，支持配置自定义目录` },
+          { hash: "46cf7cf", date: "2026-03-16", message: `增加批量打包逻辑` },
+          { hash: "004b8c9", date: "2026-03-17", message: `支持自动检测并打包 Python 运行环境` },
+          { hash: "1830cf7", date: "2026-03-17", message: `新增恢复状态支持，优化进程状态管理` },
+          { hash: "2c37b04", date: "2026-03-17", message: `优化 WebSocket 监控与用户提示逻辑` },
+          { hash: "f5668a9", date: "2026-03-17", message: `优化WebSocket资源释放及调整对话框按钮样式` },
+          { hash: "0adfc29", date: "2026-03-17", message: `检测并复用已运行的 ComfyUI 进程，避免重复启动` }
+        ]
+      },
+      {
+        id: "v1-0-8",
+        version: "v1.0.8",
+        title: "监控视图升级",
+        source: "version bump: 1.0.8",
+        summary: "把硬件监控扩展到历史折线图，并完成 1.0.8 版本校准。",
+        commits: [
+          { hash: "23ef927", date: "2026-03-22", message: `引入硬件监控历史折线图（LiveChartsCore）` },
+          { hash: "9eccac6", date: "2026-03-22", message: `升级版本号至 1.0.8` }
+        ]
+      },
+      {
+        id: "v1-0-9",
+        version: "v1.0.9",
+        title: "I/O 监控补齐",
+        source: "version bump: 1.0.9",
+        summary: "补上配置服务健壮性、磁盘 I/O 和网络 I/O 的可视化。",
+        commits: [
+          { hash: "7926120", date: "2026-03-27", message: `优化目录递归复制的排除机制，提升灵活性` },
+          { hash: "9faa87b", date: "2026-03-28", message: `增强配置服务健壮性并引入单元测试` },
+          { hash: "bcaa514", date: "2026-03-28", message: `升级项目版本至 1.0.9` },
+          { hash: "6cb92df", date: "2026-03-28", message: `新增磁盘I/O监控与可视化，优化界面布局` },
+          { hash: "116ea37", date: "2026-03-28", message: `新增磁盘I/O速率监控及曲线，优化面板布局` },
+          { hash: "02c49e5", date: "2026-03-28", message: `新增网络 I/O 速率监控及可视化支持` }
+        ]
+      },
+      {
+        id: "v1-1-0",
+        version: "v1.1.0",
+        title: "资源管理与注释整理",
+        source: "version bump: 1.1.0",
+        summary: "引入工作流列表排序，顺手整理代码注释与版本号。",
+        commits: [
+          { hash: "21ea294", date: "2026-03-28", message: `版本号更新为: 1.1.0` },
+          { hash: "4c76d7a", date: "2026-03-28", message: `资源管理：支持工作流列表列头点击排序` },
+          { hash: "ec12843", date: "2026-03-28", message: `修改agents` },
+          { hash: "8753f17", date: "2026-03-30", message: `models添加注释` },
+          { hash: "9367bd1", date: "2026-03-30", message: `Services目录的单元添加详细注释` }
+        ]
+      },
+      {
+        id: "v1-1-1",
+        version: "v1.1.1",
+        title: "运行参数扩展",
+        source: "version bump: 1.1.1",
+        summary: "新增显存与 CUDA 相关配置，继续补强启动时的监听能力。",
+        commits: [
+          { hash: "e328e25", date: "2026-04-03", message: `添加新的配置选项和相应的功能支持，包括动态显存策略、CUDA内存分配模式和异步卸载禁用选项，同时更新版本号至1.1.1，并增加相关单元测试。` },
+          { hash: "543716b", date: "2026-04-03", message: `更新监听地址预设及提示，支持多协议栈监听` }
+        ]
+      },
+      {
+        id: "v1-1-3",
+        version: "v1.1.3",
+        title: "启动体验与设备识别",
+        source: "version bump: 1.1.3",
+        summary: "补齐托盘、CUDA 设备顺序检测和单实例前的启动体验。",
+        commits: [
+          { hash: "76ff7e3", date: "2026-05-01", message: `增加系统托盘支持，优化窗口关闭与服务控制` },
+          { hash: "c959254", date: "2026-05-01", message: `更新系统托盘菜单项，动态显示应用名称和版本信息` },
+          { hash: "d1cbc1a", date: "2026-05-04", message: `引入CUDA设备顺序检测与GPU重排功能` },
+          { hash: "5779875", date: "2026-05-04", message: `升级项目版本至 1.1.3` }
+        ]
+      },
+      {
+        id: "v1-2-0",
+        version: "v1.2.0",
+        title: "运行时链路收口",
+        source: "当前版本：WpfDesktop.csproj",
+        summary: "集中修复启动链、日志输出、子进程编码、后台任务和模型导出。",
+        current: true,
+        commits: [
+          { hash: "567f92e", date: "2026-05-05", message: `实现应用单实例运行及互斥体辅助类` },
+          { hash: "2146ab1", date: "2026-05-06", message: `新增启动封面窗口及异步启动流程优化` },
+          { hash: "5224c62", date: "2026-05-06", message: `将启动闪屏图片由 PNG 替换为 JPG` },
+          { hash: "05c27fa", date: "2026-05-06", message: `顶部栏支持只显示选中 GPU，完善设置与测试` },
+          { hash: "1139f0d", date: "2026-05-06", message: `新增内存分页交换写入量监控与累计统计` },
+          { hash: "2a31c31", date: "2026-05-08", message: `增强端口显示与进程输出解码支持` },
+          { hash: "5428445", date: "2026-05-09", message: `提升异步能力与界面响应性，优化多线程支持` },
+          { hash: "a4c7cb7", date: "2026-05-10", message: `将异常详情文本框绑定改为单向模式` },
+          { hash: "272fd1d", date: "2026-05-10", message: `引入后台任务异常观察与网络异常处理机制` },
+          { hash: "42bafb3", date: "2026-05-10", message: `支持 Python 子进程 UTF-8 环境变量及相关测试` },
+          { hash: "30302f6", date: "2026-05-15", message: `修复CUDA设备同步逻辑并完善相关单元测试` },
+          { hash: "53b79fa", date: "2026-05-15", message: `重构残留进程清理逻辑，提升健壮性与可靠性` },
+          { hash: "28466ae", date: "2026-05-15", message: `移除BuildStartInfo中强制设置Python UTF8环境变量` },
+          { hash: "00108b9", date: "2026-05-15", message: `支持 ComfyRaw 日志级别及其前缀与显示优化` },
+          { hash: "11f3a20", date: "2026-05-15", message: `启动前自动创建所需目录及相关单元测试` },
+          { hash: "61b6b27", date: "2026-05-15", message: `调整Process输出编码为当前ANSI代码页并完善测试` },
+          { hash: "89bd56f", date: "2026-05-15", message: `优化硬件信息检测与日志输出流程` },
+          { hash: "82f63f6", date: "2026-05-15", message: `修复并优化ComfyUI子进程输出的编码解码` },
+          { hash: "be02af2", date: "2026-05-15", message: `优化CUDA设备选项同步与回显逻辑` },
+          { hash: "95b720a", date: "2026-05-15", message: `仅打包模型目录功能：支持单/批量模型导出` }
+        ]
+      }
+    ];
+
+    const escapeHtml = (value) => String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+
+    const formatDateRange = (commits) => {
+      const start = commits[0].date;
+      const end = commits[commits.length - 1].date;
+      return start === end ? start : `${start} → ${end}`;
+    };
+
+    const totalCommits = sections.reduce((sum, section) => sum + section.commits.length, 0);
+    const current = sections.at(-1);
+
+    document.getElementById("current-version").textContent = current.version;
+    document.getElementById("version-count").textContent = String(sections.length);
+    document.getElementById("commit-count").textContent = String(totalCommits);
+    document.getElementById("start-date").textContent = sections[0].commits[0].date;
+    document.getElementById("end-date").textContent = current.commits[current.commits.length - 1].date;
+
+    sections.reverse();
+    sections.forEach(section => section.commits.reverse());
+
+    document.getElementById("toc").innerHTML = sections.map((section) => `
+      <a class="toc-link ${section.current ? "current" : ""}" href="#${section.id}">
+        <strong>${escapeHtml(section.version)}</strong>
+        <span>${section.commits.length} commits</span>
+      </a>
+    `).join("");
+
+    document.getElementById("content").innerHTML = sections.map((section) => `
+      <article class="section glass-card ${section.current ? "current" : ""}" id="${section.id}">
+        <header class="section-head">
+          <div>
+            <div class="badge-row">
+              <span class="badge version">${escapeHtml(section.version)}</span>
+              <span class="badge source">${escapeHtml(section.source)}</span>
+              ${section.current ? '<span class="badge latest">Latest</span>' : ''}
+            </div>
+            <h3>${escapeHtml(section.title)}</h3>
+            <div class="section-meta">
+              <span>${formatDateRange(section.commits)}</span>
+              <span>·</span>
+              <span>${section.commits.length} 个提交</span>
+            </div>
+          </div>
+        </header>
+        <p class="summary">${escapeHtml(section.summary)}</p>
+        <ul class="commit-list">
+          ${section.commits.map((commit) => `
+            <li>
+              <code>${escapeHtml(commit.hash)}</code>
+              <time datetime="${escapeHtml(commit.date)}">${escapeHtml(commit.date)}</time>
+              <span class="message">${escapeHtml(commit.message)}</span>
+            </li>
+          `).join("")}
+        </ul>
+      </article>
+    `).join("");
+  </script>
+</body>
+</html>

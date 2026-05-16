@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态与公告 - ComfyShell</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-1: #3b82f6;
+            --accent-2: #8b5cf6;
+            --accent-3: #ec4899;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 85% 15%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 15% 85%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* 动画关键帧 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 导航栏 */
+        header {
+            padding: 0.5rem 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+            text-decoration: none;
+        }
+
+        /* 头部标题区域 */
+        .page-header {
+            text-align: center;
+            padding: 0.5rem 20px 1.5rem;
+            animation: fadeIn 1s ease-out forwards;
+        }
+
+        .page-header h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(270deg, var(--accent-1), var(--accent-2), var(--accent-3));
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientFlow 5s ease infinite;
+        }
+
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* 时间线容器 */
+        .timeline-container {
+            max-width: 900px;
+            margin: 0 auto 5rem;
+            padding: 0 20px;
+            position: relative;
+        }
+
+        /* 中间的主线 */
+        .timeline-container::before {
+            content: '';
+            position: absolute;
+            left: 40px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--accent-1), var(--accent-2), transparent);
+            opacity: 0.3;
+        }
+
+        /* 公告项容器 */
+        .news-item {
+            position: relative;
+            margin-bottom: 3rem;
+            padding-left: 80px;
+            animation: fadeIn 1s ease-out forwards;
+            opacity: 0;
+        }
+
+        /* 动画延迟循环 */
+        .news-item:nth-child(1) { animation-delay: 0.2s; }
+        .news-item:nth-child(2) { animation-delay: 0.4s; }
+        .news-item:nth-child(3) { animation-delay: 0.6s; }
+        .news-item:nth-child(4) { animation-delay: 0.8s; }
+
+        /* 时间线节点 */
+        .news-node {
+            position: absolute;
+            left: 31px;
+            top: 24px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--bg-primary);
+            border: 4px solid var(--accent-2);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        .news-item:hover .news-node {
+            transform: scale(1.3);
+            border-color: var(--accent-1);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+        }
+
+        /* 公告卡片 (Glassmorphism) */
+        .news-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--glass-shadow);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .news-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .news-card:hover {
+            transform: translateX(10px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .news-card:hover::before {
+            opacity: 1;
+        }
+
+        /* 卡片头部信息 (标签、日期) */
+        .news-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 0.3rem 0.8rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .tag-update {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .tag-release {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .tag-notice {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .date {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        /* 卡片内容 */
+        .news-card h2 {
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .news-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            margin-bottom: 1rem;
+        }
+
+        .news-card ul {
+            list-style: none;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-left: 0.5rem;
+        }
+
+        .news-card ul li {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .news-card ul li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent-1);
+            font-weight: bold;
+        }
+
+        /* 展开阅读更多 */
+        .read-more {
+            display: inline-block;
+            margin-top: 1rem;
+            color: var(--accent-1);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .read-more:hover {
+            color: #60a5fa;
+        }
+
+        /* 页脚 */
+        footer {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .page-header h1 { font-size: 2.5rem; }
+            .timeline-container::before { left: 20px; }
+            .news-node { left: 11px; }
+            .news-item { padding-left: 50px; }
+            .news-card { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="about.html" class="logo">ComfyShell</a>
+    </header>
+
+    <main>
+        <section class="page-header">
+            <h1>动态与公告</h1>
+            <p>追踪 ComfyShell 的最新进展、版本发布及系统公告。</p>
+        </section>
+
+        <section class="timeline-container">
+            
+            <!-- ================= 新增公告只需复制这块结构 ================= -->
+            <div class="news-item">
+                <div class="news-node"></div>
+                <div class="news-card">
+                    <div class="news-meta">
+                        <span class="tag tag-release">更新日志</span>
+                        <span class="date">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            2026-05-15
+                        </span>
+                    </div>
+                    <h2>模型导出与底层编码全面优化</h2>
+                    <p>本次更新重点优化了底层进程交互的编码问题，并新增了模型打包导出功能：</p>
+                    <ul>
+                        <li>新增：支持单/批量模型导出打包目录功能</li>
+                        <li>修复：完善 ComfyUI 子进程输出的编码解码及日志输出流程</li>
+                        <li>优化：重构残留进程清理逻辑，提升系统健壮性与可靠性</li>
+                        <li>优化：改进 CUDA 设备选项同步逻辑与日志级别前缀显示</li>
+                    </ul>
+                </div>
+            </div>
+            <!-- ================= 结束 ================= -->
+
+            <!-- 公告项 2 -->
+            <div class="news-item">
+                <div class="news-node"></div>
+                <div class="news-card">
+                    <div class="news-meta">
+                        <span class="tag tag-update">更新日志</span>
+                        <span class="date">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            2026-05-10
+                        </span>
+                    </div>
+                    <h2>引入高级异常处理与进程控制</h2>
+                    <p>增强了应用程序处理后台任务及外部环境异常的能力：</p>
+                    <ul>
+                        <li>新增：支持 Python 子进程 UTF-8 环境变量注入及相关测试</li>
+                        <li>新增：引入后台任务异常观察与网络异常处理机制</li>
+                        <li>优化：调整异常详情文本框的绑定模式为单向，提升渲染性能</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 公告项 3 -->
+            <div class="news-item">
+                <div class="news-node"></div>
+                <div class="news-card">
+                    <div class="news-meta">
+                        <span class="tag tag-notice">更新日志</span>
+                        <span class="date">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            2026-05-09
+                        </span>
+                    </div>
+                    <h2>多线程支持与界面响应提升</h2>
+                    <p>针对高并发与网络交互场景进行了专门优化：</p>
+                    <ul>
+                        <li>提升了 UI 异步处理能力与界面整体响应性，深化多线程支持</li>
+                        <li>增强了网络端口状态显示功能，优化进程输出的实时解码能力</li>
+                    </ul>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 ComfyShell Project. Crafted with modern UI aesthetics.</p>
+    </footer>
+
+</body>
+</html>
