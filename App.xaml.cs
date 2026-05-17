@@ -21,6 +21,8 @@ namespace WpfDesktop
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        private const uint AttachConsoleParentProcess = 0xFFFFFFFF;
+
         private IHost? _host;
         private ILogService? _logService;
         private AppInstanceLock? _instanceLock;
@@ -35,6 +37,7 @@ namespace WpfDesktop
             base.OnStartup(e);
             // 隐藏窗口到托盘时不自动退出应用
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            TryAttachParentConsole();
 
             try
             {
@@ -262,65 +265,59 @@ namespace WpfDesktop
             AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             {
                 var ex = args.ExceptionObject as Exception;
-                HandleGlobalException(ex, "未处理异常(AppDomain)");
+                LogGlobalException(ex, "未处理异常(AppDomain)");
             };
 
             DispatcherUnhandledException += (_, args) =>
             {
-                if (HandleRecoverableGlobalException(args.Exception, "未处理异常(UI线程)"))
-                {
-                    args.Handled = true;
-                    return;
-                }
-
                 args.Handled = true;
-                HandleFatalException(args.Exception, "未处理异常(UI线程)");
+                LogGlobalException(args.Exception, "未处理异常(UI线程)");
             };
 
             TaskScheduler.UnobservedTaskException += (_, args) =>
             {
-                if (HandleRecoverableGlobalException(args.Exception, "未观察到的任务异常"))
-                {
-                    args.SetObserved();
-                    return;
-                }
-
                 args.SetObserved();
-                HandleFatalException(args.Exception, "未观察到的任务异常");
+                LogGlobalException(args.Exception, "未观察到的任务异常");
             };
         }
 
-        private void HandleGlobalException(Exception? exception, string source)
+        private void LogGlobalException(Exception? exception, string source)
         {
-            if (HandleRecoverableGlobalException(exception, source))
-            {
-                return;
-            }
-
-            HandleFatalException(exception, source);
-        }
-
-        private bool HandleRecoverableGlobalException(Exception? exception, string source)
-        {
-            if (!GlobalExceptionPolicy.IsRecoverableNetworkException(exception))
-            {
-                return false;
-            }
-
             try
             {
-                var summary = exception == null
-                    ? source
-                    : $"{source}: {exception.GetType().Name} - {exception.Message}";
-                _logService?.Log(summary, GUILogLevel.Warning);
+                var details = BuildExceptionDetails(exception, source);
+                Console.Error.WriteLine(details);
+                Debug.WriteLine(details);
+
+                if (GlobalExceptionPolicy.IsRecoverableNetworkException(exception))
+                {
+                    _logService?.Log($"{source}: {exception?.GetType().Name ?? "Exception"} - {exception?.Message ?? "(null)"}", GUILogLevel.Warning);
+                }
+                else
+                {
+                    _logService?.LogError(source, exception);
+                }
             }
             catch
             {
                 // 日志失败不阻塞异常收口
             }
-
-            return true;
         }
+
+        private static void TryAttachParentConsole()
+        {
+            try
+            {
+                AttachConsole(AttachConsoleParentProcess);
+            }
+            catch
+            {
+                // 没有父控制台时忽略；日志仍会写到 Debug/诊断日志。
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AttachConsole(uint dwProcessId);
 
         private void HandleFatalException(Exception? exception, string source)
         {
@@ -331,57 +328,15 @@ namespace WpfDesktop
 
             try
             {
+                var details = BuildExceptionDetails(exception, source);
+                Console.Error.WriteLine(details);
+                Debug.WriteLine(details);
                 _logService?.LogError(source, exception);
             }
             catch
             {
-                // 忽略记录日志失败，继续展示异常对话框
+                // 记录失败不应影响异常收口。
             }
-
-            var details = BuildExceptionDetails(exception, source);
-
-            try
-            {
-                var dispatcher = Current?.Dispatcher;
-                if (dispatcher == null)
-                {
-                    MessageBox.Show(details, "程序异常", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                else if (dispatcher.CheckAccess())
-                {
-                    ShowFatalExceptionDialog(details);
-                }
-                else
-                {
-                    dispatcher.Invoke(() => ShowFatalExceptionDialog(details));
-                }
-            }
-            catch
-            {
-                MessageBox.Show(details, "程序异常", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                try
-                {
-                    Current?.Shutdown(-1);
-                }
-                catch
-                {
-                    Environment.Exit(-1);
-                }
-            }
-        }
-
-        private void ShowFatalExceptionDialog(string details)
-        {
-            var dialog = new GlobalExceptionDialog(details);
-            if (Current?.MainWindow != null)
-            {
-                dialog.Owner = Current.MainWindow;
-            }
-
-            dialog.ShowDialog();
         }
 
         private static string BuildExceptionDetails(Exception? exception, string source)
