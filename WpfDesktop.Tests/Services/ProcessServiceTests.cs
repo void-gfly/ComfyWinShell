@@ -289,6 +289,30 @@ public sealed class ProcessServiceTests
             entry.Message.Contains("WebSocket 探测异常连续出现 10 次", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ProbeFailureWarning_IsClearedWhenWebSocketConnectSucceeds()
+    {
+        var logService = new RecordingLogService();
+        using var service = CreateProbeService(logService);
+
+        for (var i = 0; i < 9; i++)
+        {
+            InvokePrivateVoidMethod(service, "ReportWebSocketConnectProbeFailure", "Unable to connect to the remote server");
+        }
+
+        Assert.DoesNotContain(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("WebSocket 连接探测连续失败", StringComparison.Ordinal));
+
+        InvokePrivateVoidMethod(service, "OnWebSocketConnected");
+
+        InvokePrivateVoidMethod(service, "ReportWebSocketConnectProbeFailure", "Unable to connect to the remote server");
+
+        Assert.DoesNotContain(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("WebSocket 连接探测连续失败", StringComparison.Ordinal));
+    }
+
     private static T GetPrivateField<T>(object instance, string fieldName)
     {
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);

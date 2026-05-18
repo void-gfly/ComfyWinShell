@@ -52,9 +52,9 @@ public class ProcessService : IProcessService, IDisposable
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _webSocketCts;
     private Task? _webSocketMonitorTask;
-    private bool _webSocketWaitingForServerNotified;
     private bool _webSocketDisconnectedNotified;
     private int _heartbeatProbeFailureCount;
+    private int _webSocketConnectProbeFailureCount;
     private int _webSocketDisposedProbeFailureCount;
 
     static ProcessService()
@@ -648,8 +648,8 @@ public class ProcessService : IProcessService, IDisposable
     private void StartWebSocketMonitor()
     {
         StopWebSocketMonitor();
+        Interlocked.Exchange(ref _webSocketConnectProbeFailureCount, 0);
         Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
-        _webSocketWaitingForServerNotified = false;
         _webSocketDisconnectedNotified = false;
         _webSocketCts = new CancellationTokenSource();
         _webSocketMonitorTask = MonitorWebSocketLoopAsync(_webSocketCts.Token);
@@ -725,10 +725,7 @@ public class ProcessService : IProcessService, IDisposable
                 ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
                 var clientId = $"comfyshell-{Environment.ProcessId}";
                 var wsUri = new Uri($"{_comfyWsUrl}?clientId={clientId}");
-                await _resiliencePolicyService.ExecuteAsync(
-                    nameof(MonitorWebSocketLoopAsync),
-                    ct => ws.ConnectAsync(wsUri, ct),
-                    cancellationToken);
+                await ws.ConnectAsync(wsUri, cancellationToken);
                 connected = true;
                 _webSocket = ws;
                 OnWebSocketConnected();
@@ -740,8 +737,7 @@ public class ProcessService : IProcessService, IDisposable
             }
             catch (WebSocketException ex) when (!connected && IsExpectedConnectFailure(ex))
             {
-                NotifyWebSocketWaitingForServer(ex.Message);
-                EvaluateLiveness(httpAlive: false, wsAlive: false);
+                ReportWebSocketConnectProbeFailure(ex.Message);
             }
             catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested || _isDisposed)
             {
@@ -755,14 +751,17 @@ public class ProcessService : IProcessService, IDisposable
             {
                 if (!connected && (IsExpectedConnectFailure(ex) || GlobalExceptionPolicy.IsRecoverableNetworkException(ex)))
                 {
-                    NotifyWebSocketWaitingForServer(ex.Message);
-                    EvaluateLiveness(httpAlive: false, wsAlive: false);
+                    ReportWebSocketConnectProbeFailure(ex.Message);
                 }
                 else
                 {
                     _logService.LogError("WebSocket 监控异常", ex);
                 }
-                OnWebSocketDisconnected();
+
+                if (connected)
+                {
+                    OnWebSocketDisconnected();
+                }
             }
             finally
             {
@@ -833,8 +832,8 @@ public class ProcessService : IProcessService, IDisposable
         {
             _lastHeartbeatSuccess = true;
         }
+        Interlocked.Exchange(ref _webSocketConnectProbeFailureCount, 0);
         Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
-        _webSocketWaitingForServerNotified = false;
         _webSocketDisconnectedNotified = false;
         OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已连接");
         HeartbeatStatusChanged?.Invoke(this, true);
@@ -900,22 +899,6 @@ public class ProcessService : IProcessService, IDisposable
     }
 
     /// <summary>
-    /// 在首次连接失败时输出等待服务器启动的提示。
-    /// </summary>
-    /// <param name="reason">连接失败原因。</param>
-    private void NotifyWebSocketWaitingForServer(string reason)
-    {
-        if (_webSocketWaitingForServerNotified)
-        {
-            return;
-        }
-
-        _webSocketWaitingForServerNotified = true;
-        _webSocketDisconnectedNotified = false;
-        OutputReceived?.Invoke(this, $"[ProcessService] WebSocket 暂不可连接（等待 ComfyUI 启动）：{reason}");
-    }
-
-    /// <summary>
     /// 记录 HTTP 心跳探测失败，并在连续失败达到阈值时提醒一次。
     /// </summary>
     /// <param name="reason">失败原因。</param>
@@ -962,6 +945,23 @@ public class ProcessService : IProcessService, IDisposable
 
         _logService.Log(
             $"WebSocket 探测异常连续出现 {failureCount} 次：{reason}",
+            GUILogLevel.Warning);
+    }
+
+    /// <summary>
+    /// 记录 WebSocket 连接探测失败，并在连续失败达到阈值时提醒一次。
+    /// </summary>
+    /// <param name="reason">失败原因。</param>
+    private void ReportWebSocketConnectProbeFailure(string reason)
+    {
+        var failureCount = Interlocked.Increment(ref _webSocketConnectProbeFailureCount);
+        if (failureCount < ProbeWarningThreshold || failureCount % ProbeWarningThreshold != 0)
+        {
+            return;
+        }
+
+        _logService.Log(
+            $"WebSocket 连接探测连续失败 {failureCount} 次：{reason}",
             GUILogLevel.Warning);
     }
 
