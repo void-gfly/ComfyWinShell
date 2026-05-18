@@ -25,7 +25,8 @@ public sealed class ProcessServiceTests
             new ArgumentBuilder(),
             new FakePythonPathService(),
             new FakeProxyService(),
-            new FakeLogService());
+            new FakeLogService(),
+            new ResiliencePolicyService(new FakeLogService()));
 
         service.ConfigureApiEndpoint(listen, 8188);
 
@@ -45,7 +46,8 @@ public sealed class ProcessServiceTests
             new ArgumentBuilder(),
             pythonPathService,
             new FakeProxyService(),
-            new FakeLogService());
+            new FakeLogService(),
+            new ResiliencePolicyService(new FakeLogService()));
 
         var startTask = Task.Factory.StartNew(
             () => service.StartAsync(tempRoot.RootPath, new ComfyConfiguration()),
@@ -84,7 +86,8 @@ public sealed class ProcessServiceTests
             new ArgumentBuilder(),
             pythonPathService,
             new FakeProxyService(),
-            new FakeLogService());
+            new FakeLogService(),
+            new ResiliencePolicyService(new FakeLogService()));
 
         var configuration = new ComfyConfiguration
         {
@@ -143,7 +146,8 @@ public sealed class ProcessServiceTests
             new ArgumentBuilder(),
             new FakePythonPathService(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe"),
             new FakeProxyService(),
-            new FakeLogService());
+            new FakeLogService(),
+            new ResiliencePolicyService(new FakeLogService()));
 
         var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
 
@@ -164,7 +168,8 @@ public sealed class ProcessServiceTests
             new ArgumentBuilder(),
             new FakePythonPathService(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe"),
             new FakeProxyService(),
-            new FakeLogService());
+            new FakeLogService(),
+            new ResiliencePolicyService(new FakeLogService()));
 
         var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
 

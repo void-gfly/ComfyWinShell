@@ -142,7 +142,7 @@ print(json.dumps(devices, ensure_ascii=False))
             }
             catch
             {
-                // ignore
+                Debug.WriteLine("关闭 torch.cuda 探测进程失败。");
             }
 
             return string.Empty;

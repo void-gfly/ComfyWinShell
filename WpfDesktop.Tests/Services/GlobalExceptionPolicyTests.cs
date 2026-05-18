@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using Polly.Timeout;
 using WpfDesktop.Services;
 using Xunit;
 
@@ -19,6 +20,16 @@ public sealed class GlobalExceptionPolicyTests
     public void IsRecoverableNetworkException_ReturnsTrueForNetworkAndTimeoutTypes(Type exceptionType)
     {
         var exception = (Exception)Activator.CreateInstance(exceptionType)!;
+
+        var result = GlobalExceptionPolicy.IsRecoverableNetworkException(exception);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsRecoverableNetworkException_ReturnsTrueForPollyTimeoutRejectedException()
+    {
+        var exception = new TimeoutRejectedException("timeout");
 
         var result = GlobalExceptionPolicy.IsRecoverableNetworkException(exception);
 

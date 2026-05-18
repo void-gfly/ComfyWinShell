@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using Polly.Timeout;
 
 namespace WpfDesktop.Services;
 
@@ -41,7 +42,7 @@ public static class GlobalExceptionPolicy
                    IsRecoverableNetworkExceptionCore(aggregateException.InnerException);
         }
 
-        if (exception is HttpRequestException or SocketException or WebSocketException or TimeoutException or TaskCanceledException or OperationCanceledException or WebException)
+        if (exception is HttpRequestException or SocketException or WebSocketException or TimeoutRejectedException or TimeoutException or TaskCanceledException or OperationCanceledException or WebException)
         {
             return true;
         }

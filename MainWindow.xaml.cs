@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using H.NotifyIcon;
 using WpfDesktop.Models;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 using WpfDesktop.ViewModels;
 using WpfDesktop.Views;
@@ -106,13 +107,13 @@ namespace WpfDesktop
 
         private void OnProcessStatusChanged(object? sender, ProcessStatus status)
         {
-            Dispatcher.Invoke(() =>
+            UiDispatcherHelper.TryInvoke(Dispatcher, () =>
             {
                 if (_serviceMenuItem == null) return;
                 _serviceMenuItem.Header = status.IsRunning
                     ? $"停止 ({_viewModel.CurrentEndpointText})"
                     : "启动";
-            });
+            }, nameof(MainWindow));
         }
 
         private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -123,7 +124,7 @@ namespace WpfDesktop
                 return;
             }
 
-            Dispatcher.Invoke(() => UpdateTrayAppName(_viewModel.AppName, _viewModel.AppVersionText));
+            UiDispatcherHelper.TryInvoke(Dispatcher, () => UpdateTrayAppName(_viewModel.AppName, _viewModel.AppVersionText), nameof(MainWindow));
         }
 
         private void UpdateTrayAppName(string? appName, string? appVersionText)

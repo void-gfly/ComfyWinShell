@@ -181,9 +181,9 @@ namespace WpfDesktop
             {
                 _startupSplashWindow?.Close();
             }
-            catch
+            catch (Exception ex)
             {
-                // 启动封面关闭失败不影响主流程
+                Debug.WriteLine($"关闭启动封面失败: {ex}");
             }
             finally
             {
@@ -233,6 +233,7 @@ namespace WpfDesktop
                     services.AddSingleton<IDialogService, DialogService>();
                     services.AddSingleton<ISettingsService, SettingsService>();
                     services.AddSingleton<ILogService, LogService>();
+                    services.AddSingleton<IResiliencePolicyService, ResiliencePolicyService>();
                     services.AddSingleton<IConfigurationService, ConfigurationService>();
                     services.AddSingleton<IProfileService, ProfileService>();
                     services.AddSingleton<IVersionService, VersionService>();
@@ -275,23 +276,23 @@ namespace WpfDesktop
             AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             {
                 var ex = args.ExceptionObject as Exception;
-                LogGlobalException(ex, "未处理异常(AppDomain)");
+                LogGlobalException(ex, "未处理异常(AppDomain)", showDialog: true);
             };
 
             DispatcherUnhandledException += (_, args) =>
             {
                 args.Handled = true;
-                LogGlobalException(args.Exception, "未处理异常(UI线程)");
+                LogGlobalException(args.Exception, "未处理异常(UI线程)", showDialog: true);
             };
 
             TaskScheduler.UnobservedTaskException += (_, args) =>
             {
                 args.SetObserved();
-                LogGlobalException(args.Exception, "未观察到的任务异常");
+                LogGlobalException(args.Exception, "未观察到的任务异常", showDialog: false);
             };
         }
 
-        private void LogGlobalException(Exception? exception, string source)
+        private void LogGlobalException(Exception? exception, string source, bool showDialog)
         {
             try
             {
@@ -322,6 +323,18 @@ namespace WpfDesktop
                         FileLogWriter.WriteRaw(details);
                     }
                 }
+
+                if (!showDialog || GlobalExceptionPolicy.IsRecoverableNetworkException(exception))
+                {
+                    return;
+                }
+
+                if (Interlocked.Exchange(ref _fatalExceptionHandled, 1) == 1)
+                {
+                    return;
+                }
+
+                ShowGlobalExceptionDialog(details, shutdownAfterClose: false);
             }
             catch
             {
@@ -335,9 +348,9 @@ namespace WpfDesktop
             {
                 AttachConsole(AttachConsoleParentProcess);
             }
-            catch
+            catch (Exception ex)
             {
-                // 没有父控制台时忽略；日志仍会写到 Debug/诊断日志。
+                Debug.WriteLine($"附加父控制台失败: {ex}");
             }
         }
 
@@ -365,10 +378,54 @@ namespace WpfDesktop
                 {
                     FileLogWriter.WriteRaw(details);
                 }
+
+                ShowGlobalExceptionDialog(details, shutdownAfterClose: true);
             }
             catch
             {
                 // 记录失败不应影响异常收口。
+            }
+        }
+
+        private void ShowGlobalExceptionDialog(string details, bool shutdownAfterClose)
+        {
+            try
+            {
+                void ShowDialogCore()
+                {
+                    var dialog = new GlobalExceptionDialog(details);
+                    if (MainWindow is Window mainWindow)
+                    {
+                        dialog.Owner = mainWindow;
+                    }
+
+                    dialog.ShowDialog();
+
+                    if (shutdownAfterClose && !Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+                    {
+                        Shutdown();
+                    }
+                }
+
+                if (Dispatcher.CheckAccess())
+                {
+                    ShowDialogCore();
+                    return;
+                }
+
+                Dispatcher.Invoke(ShowDialogCore);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"显示全局异常弹窗失败: {ex}");
+                try
+                {
+                    MessageBox.Show(details, "程序异常", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch (Exception secondaryEx)
+                {
+                    Debug.WriteLine($"显示全局异常兜底消息框失败: {secondaryEx}");
+                }
             }
         }
 

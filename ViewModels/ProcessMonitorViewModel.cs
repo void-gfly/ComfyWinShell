@@ -352,19 +352,7 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
     private static void RunOnUiThread(Action action)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
-        {
-            return;
-        }
-
-        if (dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        _ = dispatcher.BeginInvoke(action);
+        UiDispatcherHelper.TryInvoke(System.Windows.Application.Current?.Dispatcher, action, nameof(ProcessMonitorViewModel));
     }
 
     private static double ResolveLogLineHeight(int value)

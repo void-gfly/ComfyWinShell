@@ -1,5 +1,6 @@
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
+using System.Diagnostics;
 
 namespace WpfDesktop.Services;
 
@@ -52,9 +53,9 @@ public static class BackgroundTaskObserver
 
             logService?.LogError(source, exception);
         }
-        catch
+        catch (Exception ex)
         {
-            // 后台异常观察失败不应再抛出新异常
+            Debug.WriteLine($"后台异常观察失败: {ex}");
         }
     }
 }

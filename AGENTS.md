@@ -75,10 +75,23 @@
 - UI 更新需切回 UI 线程：
   - 参考 `RunOnUiThread` 模式（`MainViewModel`, `ProcessMonitorViewModel`）
 
-### 6.4 错误处理
+### 6.4 异常处理
+
+- 禁止空 `catch`。
+- 禁止吞异常后静默失败。
+- I/O、配置、网络调用需要在合适位置捕获并反馈到日志或 UI。
+- 优先定位根因，不要用兜底分支掩盖问题。
 - UI 层可采用“柔性失败”策略（如文件夹打开失败）
 - 服务层、核心流程出现异常时应记录日志：使用 `ILogService`
 - 全局异常处理已在 `App.xaml.cs` 注册（`UnhandledException` + `DispatcherUnhandledException`）
+
+###  Polly 异常处理规范
+
+- 仅用于外部依赖的瞬时故障（如网络、IO、超时），禁止用于业务或确定性错误（如参数错误、404）。
+- 使用 `ResiliencePipelineBuilder` 构建，Retry 必须包含 `MaxRetryAttempts` + `ShouldHandle`，禁止无限或无条件重试。
+- 所有外部调用必须设置 `Timeout`，高风险依赖建议加入 `CircuitBreaker`。
+- Pipeline 必须复用（如 DI 单例），禁止在方法内部重复创建。
+- 必须记录关键事件（如 `OnRetry` / `OnTimeout`）以保证可观测性。
 
 ### 6.5 空值与可空性
 - 项目启用 `Nullable`，新增代码需显式处理可空场景

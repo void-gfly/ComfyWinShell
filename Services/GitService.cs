@@ -14,16 +14,18 @@ public class GitService : IGitService
 {
     private readonly IProxyService _proxyService;
     private readonly ILogService _logService;
+    private readonly IResiliencePolicyService _resiliencePolicyService;
 
     /// <summary>
     /// 初始化 Git 服务。
     /// </summary>
     /// <param name="proxyService">代理服务。</param>
     /// <param name="logService">日志服务。</param>
-    public GitService(IProxyService proxyService, ILogService logService)
+    public GitService(IProxyService proxyService, ILogService logService, IResiliencePolicyService resiliencePolicyService)
     {
         _proxyService = proxyService;
         _logService = logService;
+        _resiliencePolicyService = resiliencePolicyService;
     }
 
     /// <summary>
@@ -247,53 +249,82 @@ public class GitService : IGitService
     /// <returns>命令标准输出内容。</returns>
     private async Task<string> RunGitCommandAsync(string workingDir, string arguments)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            Arguments = arguments,
-            WorkingDirectory = workingDir,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8
-        };
-
-        // 配置代理环境变量
-        _proxyService.ConfigureProcessProxy(startInfo);
-
-        using var process = new Process { StartInfo = startInfo };
-        var outputBuilder = new StringBuilder();
-        var errorBuilder = new StringBuilder();
-
-        process.OutputDataReceived += (_, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
-
-        try
-        {
-            process.Start();
-        }
-        catch (Win32Exception ex)
-        {
-            if (ex.NativeErrorCode == 2) // File not found
+        return await _resiliencePolicyService.ExecuteAsync(
+            $"Git:{arguments}",
+            async ct =>
             {
-                throw new FileNotFoundException("Git executable not found. Please install Git and ensure it is in your PATH.", "git");
-            }
-            throw;
-        }
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = arguments,
+                    WorkingDirectory = workingDir,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8
+                };
 
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+                // 配置代理环境变量
+                _proxyService.ConfigureProcessProxy(startInfo);
 
-        await process.WaitForExitAsync();
+                using var process = new Process { StartInfo = startInfo };
+                var outputBuilder = new StringBuilder();
+                var errorBuilder = new StringBuilder();
+                var started = false;
 
-        if (process.ExitCode != 0)
-        {
-            var error = errorBuilder.ToString();
-            // Git often outputs progress to stderr, so only treat as error if exit code is non-zero
-            throw new Exception($"Git command failed (ExitCode {process.ExitCode}): {error}");
-        }
+                process.OutputDataReceived += (_, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                process.ErrorDataReceived += (_, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
 
-        return outputBuilder.ToString();
+                try
+                {
+                    started = process.Start();
+                }
+                catch (Win32Exception ex)
+                {
+                    if (ex.NativeErrorCode == 2)
+                    {
+                        throw new FileNotFoundException("Git executable not found. Please install Git and ensure it is in your PATH.", "git");
+                    }
+
+                    throw;
+                }
+
+                if (!started)
+                {
+                    throw new InvalidOperationException("Failed to start Git process.");
+                }
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                try
+                {
+                    await process.WaitForExitAsync(ct);
+                }
+                catch
+                {
+                    if (started && !process.HasExited)
+                    {
+                        try
+                        {
+                            process.Kill(entireProcessTree: true);
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    throw;
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    var error = errorBuilder.ToString();
+                    throw new Exception($"Git command failed (ExitCode {process.ExitCode}): {error}");
+                }
+
+                return outputBuilder.ToString();
+            });
     }
 }

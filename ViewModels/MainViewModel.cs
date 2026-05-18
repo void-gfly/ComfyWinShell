@@ -440,19 +440,7 @@ public partial class MainViewModel : ViewModelBase
 
     private static void RunOnUiThread(Action action)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
-        {
-            return;
-        }
-
-        if (dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        _ = dispatcher.BeginInvoke(action);
+        UiDispatcherHelper.TryInvoke(System.Windows.Application.Current?.Dispatcher, action, nameof(MainViewModel));
     }
 
     private async Task SyncExtraModelPathsYamlOnStartupAsync()

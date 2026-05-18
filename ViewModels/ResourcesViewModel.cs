@@ -569,13 +569,7 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     private static void RunOnUiThread(Action action)
     {
-        if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
-        {
-            action();
-            return;
-        }
-
-        System.Windows.Application.Current?.Dispatcher?.Invoke(action);
+        UiDispatcherHelper.TryInvoke(System.Windows.Application.Current?.Dispatcher, action, nameof(ResourcesViewModel));
     }
 
     #endregion

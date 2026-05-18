@@ -30,6 +30,7 @@ public class ProcessService : IProcessService, IDisposable
     private readonly IPythonPathService _pythonPathService;
     private readonly IProxyService _proxyService;
     private readonly ILogService _logService;
+    private readonly IResiliencePolicyService _resiliencePolicyService;
     private readonly HttpClient _httpClient;
     private readonly Timer _heartbeatTimer;
     private Process? _process;
@@ -106,13 +107,15 @@ public class ProcessService : IProcessService, IDisposable
         ArgumentBuilder argumentBuilder,
         IPythonPathService pythonPathService,
         IProxyService proxyService,
-        ILogService logService)
+        ILogService logService,
+        IResiliencePolicyService resiliencePolicyService)
     {
         _argumentBuilder = argumentBuilder;
         _pythonPathService = pythonPathService;
         _proxyService = proxyService;
         _logService = logService;
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HeartbeatTimeoutMs) };
+        _resiliencePolicyService = resiliencePolicyService;
+        _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _heartbeatTimer = new Timer(OnHeartbeatTick, null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -586,9 +589,11 @@ public class ProcessService : IProcessService, IDisposable
             return false;
         }
 
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(HeartbeatTimeoutMs));
+
         try
         {
-            using var response = await _httpClient.GetAsync(_comfyApiUrl);
+            using var response = await _httpClient.GetAsync(_comfyApiUrl, timeoutCts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 return false;
@@ -598,12 +603,24 @@ public class ProcessService : IProcessService, IDisposable
             UpdateSystemStats(responseText);
             return true;
         }
-        catch (HttpRequestException)
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
+            _logService.Log(
+                $"HTTP 心跳检测超时（{HeartbeatTimeoutMs} 毫秒）",
+                GUILogLevel.Warning);
             return false;
         }
-        catch (TaskCanceledException)
+        catch (Exception ex)
         {
+            if (GlobalExceptionPolicy.IsRecoverableNetworkException(ex))
+            {
+                _logService.Log($"HTTP 心跳检测失败: {ex.Message}", GUILogLevel.Warning);
+            }
+            else
+            {
+                _logService.LogError("HTTP 心跳检测失败", ex);
+            }
+
             return false;
         }
     }
@@ -630,9 +647,9 @@ public class ProcessService : IProcessService, IDisposable
         {
             _webSocketCts?.Cancel();
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Debug.WriteLine($"停止 WebSocket 监控时取消令牌失败: {ex}");
         }
 
         try
@@ -641,9 +658,9 @@ public class ProcessService : IProcessService, IDisposable
             // 直接释放底层 socket，由取消令牌驱动监控循环退出。
             _webSocket?.Abort();
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Debug.WriteLine($"停止 WebSocket 监控时中止连接失败: {ex}");
         }
         finally
         {
@@ -655,9 +672,9 @@ public class ProcessService : IProcessService, IDisposable
         {
             _webSocketMonitorTask?.Wait(TimeSpan.FromMilliseconds(300));
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Debug.WriteLine($"停止 WebSocket 监控时等待任务失败: {ex}");
         }
 
         _webSocketMonitorTask = null;
@@ -690,7 +707,10 @@ public class ProcessService : IProcessService, IDisposable
                 ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
                 var clientId = $"comfyshell-{Environment.ProcessId}";
                 var wsUri = new Uri($"{_comfyWsUrl}?clientId={clientId}");
-                await ws.ConnectAsync(wsUri, cancellationToken);
+                await _resiliencePolicyService.ExecuteAsync(
+                    nameof(MonitorWebSocketLoopAsync),
+                    ct => ws.ConnectAsync(wsUri, ct),
+                    cancellationToken);
                 connected = true;
                 _webSocket = ws;
                 OnWebSocketConnected();
@@ -707,9 +727,10 @@ public class ProcessService : IProcessService, IDisposable
             }
             catch (Exception ex)
             {
-                if (!connected && IsExpectedConnectFailure(ex))
+                if (!connected && (IsExpectedConnectFailure(ex) || GlobalExceptionPolicy.IsRecoverableNetworkException(ex)))
                 {
                     NotifyWebSocketWaitingForServer(ex.Message);
+                    EvaluateLiveness(httpAlive: false, wsAlive: false);
                 }
                 else
                 {

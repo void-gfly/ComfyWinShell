@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
+using WpfDesktop.Services;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Views;
@@ -206,7 +207,7 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
     {
         if (!string.IsNullOrEmpty(e.Data))
         {
-            Dispatcher.BeginInvoke(() => AppendLog(e.Data + "\n"));
+            UiDispatcherHelper.TryInvoke(Dispatcher, () => AppendLog(e.Data + "\n"), nameof(GitCloneDialog));
         }
     }
 
@@ -215,7 +216,7 @@ public partial class GitCloneDialog : Window, INotifyPropertyChanged
         // Git 的进度信息通过 stderr 输出
         if (!string.IsNullOrEmpty(e.Data))
         {
-            Dispatcher.BeginInvoke(() => AppendLog(e.Data + "\n"));
+            UiDispatcherHelper.TryInvoke(Dispatcher, () => AppendLog(e.Data + "\n"), nameof(GitCloneDialog));
         }
     }
 
