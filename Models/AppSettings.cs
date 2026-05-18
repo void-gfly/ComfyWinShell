@@ -31,6 +31,11 @@ public class AppSettings
     public int LogLineHeight { get; set; } = 15;
 
     /// <summary>
+    /// 是否以外部控制台窗口启动 ComfyUI，而不将输出内联到本程序。
+    /// </summary>
+    public bool ExternalLaunchComfyUI { get; set; }
+
+    /// <summary>
     /// 是否只在顶部栏显示 ComfyUI 当前选中的 GPU。
     /// </summary>
     public bool ShowSelectedGpuOnly { get; set; }

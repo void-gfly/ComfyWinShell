@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using WpfDesktop.Models;
 using WpfDesktop.Services.Interfaces;
 
@@ -19,6 +20,7 @@ public class ProcessService : IProcessService, IDisposable
     private const uint CtrlBreakEvent = 1;
     private const int HeartbeatIntervalMs = 3000;
     private const int HeartbeatTimeoutMs = 2000;
+    private const int ProbeWarningThreshold = 10;
     private const int RecoveryWindowMs = 90000;
     private const int WebSocketReconnectDelayMs = 2000;
     private const int WebSocketInitialConnectDelayMs = 6000;
@@ -30,6 +32,7 @@ public class ProcessService : IProcessService, IDisposable
     private readonly IPythonPathService _pythonPathService;
     private readonly IProxyService _proxyService;
     private readonly ILogService _logService;
+    private readonly ISettingsService _settingsService;
     private readonly IResiliencePolicyService _resiliencePolicyService;
     private readonly HttpClient _httpClient;
     private readonly Timer _heartbeatTimer;
@@ -51,6 +54,8 @@ public class ProcessService : IProcessService, IDisposable
     private Task? _webSocketMonitorTask;
     private bool _webSocketWaitingForServerNotified;
     private bool _webSocketDisconnectedNotified;
+    private int _heartbeatProbeFailureCount;
+    private int _webSocketDisposedProbeFailureCount;
 
     static ProcessService()
     {
@@ -108,12 +113,14 @@ public class ProcessService : IProcessService, IDisposable
         IPythonPathService pythonPathService,
         IProxyService proxyService,
         ILogService logService,
+        ISettingsService settingsService,
         IResiliencePolicyService resiliencePolicyService)
     {
         _argumentBuilder = argumentBuilder;
         _pythonPathService = pythonPathService;
         _proxyService = proxyService;
         _logService = logService;
+        _settingsService = settingsService;
         _resiliencePolicyService = resiliencePolicyService;
         _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _heartbeatTimer = new Timer(OnHeartbeatTick, null, Timeout.Infinite, Timeout.Infinite);
@@ -180,10 +187,11 @@ public class ProcessService : IProcessService, IDisposable
                 return false;
             }
 
+            var appSettings = await _settingsService.LoadAsync();
             EnsureStartupDirectories(comfyRootPath, configuration);
 
             var arguments = _argumentBuilder.BuildArguments(configuration);
-            var startInfo = BuildStartInfo(comfyRootPath, arguments);
+            var startInfo = BuildStartInfo(comfyRootPath, arguments, appSettings.ExternalLaunchComfyUI);
             if (startInfo == null)
             {
                 OutputReceived?.Invoke(this, "无法启动：未能定位 Python 或 main.py，请在仪表盘确认 ComfyUI 路径与 Python 环境。");
@@ -229,8 +237,6 @@ public class ProcessService : IProcessService, IDisposable
             var started = _process.Start();
             if (started)
             {
-                _ = ReadComfyOutputAsync(_process.StandardOutput.BaseStream);
-                _ = ReadComfyOutputAsync(_process.StandardError.BaseStream);
                 lock (_statusLock)
                 {
                     _status.State = ProcessState.Running;
@@ -241,6 +247,12 @@ public class ProcessService : IProcessService, IDisposable
                 StatusChanged?.Invoke(this, CreateStatusSnapshot());
                 StartHeartbeat();
                 StartWebSocketMonitor();
+
+                if (!appSettings.ExternalLaunchComfyUI)
+                {
+                    _ = ReadComfyOutputAsync(_process.StandardOutput.BaseStream);
+                    _ = ReadComfyOutputAsync(_process.StandardError.BaseStream);
+                }
             }
             else
             {
@@ -431,6 +443,7 @@ public class ProcessService : IProcessService, IDisposable
     /// </summary>
     private void StartHeartbeat()
     {
+        ResetHeartbeatProbeFailureCount();
         _isHeartbeatEnabled = true;
         _lastHeartbeatSuccess = false;
         _heartbeatTimer.Change(HeartbeatIntervalMs, HeartbeatIntervalMs);
@@ -460,6 +473,11 @@ public class ProcessService : IProcessService, IDisposable
         {
             var httpAlive = await CheckHeartbeatAsync();
             var wsAlive = IsWebSocketAlive();
+            if (!httpAlive && !wsAlive && ShouldSuppressHeartbeatProbeFailureNotice())
+            {
+                return;
+            }
+
             var combinedAlive = httpAlive || wsAlive;
 
             if (combinedAlive != _lastHeartbeatSuccess)
@@ -601,20 +619,19 @@ public class ProcessService : IProcessService, IDisposable
 
             var responseText = await response.Content.ReadAsStringAsync();
             UpdateSystemStats(responseText);
+            ResetHeartbeatProbeFailureCount();
             return true;
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            _logService.Log(
-                $"HTTP 心跳检测超时（{HeartbeatTimeoutMs} 毫秒）",
-                GUILogLevel.Warning);
+            ReportHeartbeatProbeFailure($"超时（{HeartbeatTimeoutMs} 毫秒）");
             return false;
         }
         catch (Exception ex)
         {
             if (GlobalExceptionPolicy.IsRecoverableNetworkException(ex))
             {
-                _logService.Log($"HTTP 心跳检测失败: {ex.Message}", GUILogLevel.Warning);
+                ReportHeartbeatProbeFailure(ex.Message);
             }
             else
             {
@@ -631,6 +648,7 @@ public class ProcessService : IProcessService, IDisposable
     private void StartWebSocketMonitor()
     {
         StopWebSocketMonitor();
+        Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
         _webSocketWaitingForServerNotified = false;
         _webSocketDisconnectedNotified = false;
         _webSocketCts = new CancellationTokenSource();
@@ -725,6 +743,14 @@ public class ProcessService : IProcessService, IDisposable
                 NotifyWebSocketWaitingForServer(ex.Message);
                 EvaluateLiveness(httpAlive: false, wsAlive: false);
             }
+            catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested || _isDisposed)
+            {
+                break;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                ReportWebSocketDisposedProbeFailure(ex.Message);
+            }
             catch (Exception ex)
             {
                 if (!connected && (IsExpectedConnectFailure(ex) || GlobalExceptionPolicy.IsRecoverableNetworkException(ex)))
@@ -807,6 +833,7 @@ public class ProcessService : IProcessService, IDisposable
         {
             _lastHeartbeatSuccess = true;
         }
+        Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
         _webSocketWaitingForServerNotified = false;
         _webSocketDisconnectedNotified = false;
         OutputReceived?.Invoke(this, "[ProcessService] WebSocket 已连接");
@@ -837,6 +864,8 @@ public class ProcessService : IProcessService, IDisposable
         {
             return;
         }
+
+        Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
 
         // 只要能收到消息就说明服务在线；再按类型输出少量诊断日志避免刷屏
         EvaluateLiveness(httpAlive: false, wsAlive: true);
@@ -884,6 +913,56 @@ public class ProcessService : IProcessService, IDisposable
         _webSocketWaitingForServerNotified = true;
         _webSocketDisconnectedNotified = false;
         OutputReceived?.Invoke(this, $"[ProcessService] WebSocket 暂不可连接（等待 ComfyUI 启动）：{reason}");
+    }
+
+    /// <summary>
+    /// 记录 HTTP 心跳探测失败，并在连续失败达到阈值时提醒一次。
+    /// </summary>
+    /// <param name="reason">失败原因。</param>
+    private void ReportHeartbeatProbeFailure(string reason)
+    {
+        var failureCount = Interlocked.Increment(ref _heartbeatProbeFailureCount);
+        if (failureCount < ProbeWarningThreshold || failureCount % ProbeWarningThreshold != 0)
+        {
+            return;
+        }
+
+        _logService.Log(
+            $"HTTP 心跳探测连续失败 {failureCount} 次：{reason}",
+            GUILogLevel.Warning);
+    }
+
+    /// <summary>
+    /// 在 HTTP 心跳恢复时重置失败计数。
+    /// </summary>
+    private void ResetHeartbeatProbeFailureCount()
+    {
+        Interlocked.Exchange(ref _heartbeatProbeFailureCount, 0);
+    }
+
+    /// <summary>
+    /// 判断当前 HTTP 心跳失败是否仍处于静默观察期。
+    /// </summary>
+    private bool ShouldSuppressHeartbeatProbeFailureNotice()
+    {
+        return Volatile.Read(ref _heartbeatProbeFailureCount) < ProbeWarningThreshold;
+    }
+
+    /// <summary>
+    /// 记录 WebSocket 探测中的 ObjectDisposedException，并在连续失败达到阈值时提醒一次。
+    /// </summary>
+    /// <param name="reason">失败原因。</param>
+    private void ReportWebSocketDisposedProbeFailure(string reason)
+    {
+        var failureCount = Interlocked.Increment(ref _webSocketDisposedProbeFailureCount);
+        if (failureCount < ProbeWarningThreshold || failureCount % ProbeWarningThreshold != 0)
+        {
+            return;
+        }
+
+        _logService.Log(
+            $"WebSocket 探测异常连续出现 {failureCount} 次：{reason}",
+            GUILogLevel.Warning);
     }
 
     /// <summary>
@@ -1024,7 +1103,7 @@ public class ProcessService : IProcessService, IDisposable
     /// <param name="comfyRootPath">ComfyUI 根目录。</param>
     /// <param name="arguments">附加命令行参数。</param>
     /// <returns>可用的启动信息；缺少关键路径时返回 null。</returns>
-    private ProcessStartInfo? BuildStartInfo(string comfyRootPath, string arguments)
+    private ProcessStartInfo? BuildStartInfo(string comfyRootPath, string arguments, bool externalLaunchComfyUI)
     {
         if (string.IsNullOrWhiteSpace(comfyRootPath))
         {
@@ -1049,9 +1128,10 @@ public class ProcessService : IProcessService, IDisposable
             Arguments = $"-s \"{mainPath}\" --windows-standalone-build{argsStr}",
             WorkingDirectory = comfyRootPath,
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
+            RedirectStandardOutput = !externalLaunchComfyUI,
+            RedirectStandardError = !externalLaunchComfyUI,
+            CreateNoWindow = !externalLaunchComfyUI,
+            WindowStyle = externalLaunchComfyUI ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden
         };
 
         _proxyService.ConfigureProcessProxy(startInfo);

@@ -26,6 +26,7 @@ public sealed class ProcessServiceTests
             new FakePythonPathService(),
             new FakeProxyService(),
             new FakeLogService(),
+            new FakeSettingsService(),
             new ResiliencePolicyService(new FakeLogService()));
 
         service.ConfigureApiEndpoint(listen, 8188);
@@ -47,6 +48,7 @@ public sealed class ProcessServiceTests
             pythonPathService,
             new FakeProxyService(),
             new FakeLogService(),
+            new FakeSettingsService(),
             new ResiliencePolicyService(new FakeLogService()));
 
         var startTask = Task.Factory.StartNew(
@@ -87,6 +89,7 @@ public sealed class ProcessServiceTests
             pythonPathService,
             new FakeProxyService(),
             new FakeLogService(),
+            new FakeSettingsService(),
             new ResiliencePolicyService(new FakeLogService()));
 
         var configuration = new ComfyConfiguration
@@ -147,35 +150,47 @@ public sealed class ProcessServiceTests
             new FakePythonPathService(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe"),
             new FakeProxyService(),
             new FakeLogService(),
+            new FakeSettingsService(),
             new ResiliencePolicyService(new FakeLogService()));
 
-        var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
+        var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty, false);
 
         Assert.NotNull(startInfo);
         Assert.False(startInfo!.EnvironmentVariables.ContainsKey("PYTHONUTF8"));
         Assert.Equal("utf-8", startInfo.EnvironmentVariables["PYTHONIOENCODING"]);
+        Assert.True(startInfo.RedirectStandardOutput);
+        Assert.True(startInfo.RedirectStandardError);
+        Assert.True(startInfo.CreateNoWindow);
     }
 
     [Fact]
-    public void BuildStartInfo_DoesNotSetFixedOutputEncoding_ForRawComfyUiOutputReader()
+    public void BuildStartInfo_DisablesOutputRedirection_ForExternalLaunchMode()
     {
         using var tempRoot = new TempComfyRoot();
         var comfyCorePath = Path.Combine(tempRoot.RootPath, "ComfyUI");
         Directory.CreateDirectory(comfyCorePath);
         File.WriteAllText(Path.Combine(comfyCorePath, "main.py"), "print('ok')");
 
+        var settingsService = new FakeSettingsService(new AppSettings
+        {
+            ExternalLaunchComfyUI = true
+        });
+
         using var service = new ProcessService(
             new ArgumentBuilder(),
             new FakePythonPathService(@"C:\ComfyShell\ComfyUI\python_embeded\python.exe"),
             new FakeProxyService(),
             new FakeLogService(),
+            settingsService,
             new ResiliencePolicyService(new FakeLogService()));
 
-        var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty);
+        var startInfo = InvokeBuildStartInfo(service, tempRoot.RootPath, string.Empty, true);
 
         Assert.NotNull(startInfo);
-        Assert.Null(startInfo!.StandardOutputEncoding);
-        Assert.Null(startInfo.StandardErrorEncoding);
+        Assert.False(startInfo!.RedirectStandardOutput);
+        Assert.False(startInfo.RedirectStandardError);
+        Assert.False(startInfo.CreateNoWindow);
+        Assert.Equal(ProcessWindowStyle.Normal, startInfo.WindowStyle);
     }
 
     [Fact]
@@ -232,6 +247,48 @@ public sealed class ProcessServiceTests
         Assert.False(matched);
     }
 
+    [Fact]
+    public void ProbeFailureWarning_IsSuppressedUntilHeartbeatThreshold()
+    {
+        var logService = new RecordingLogService();
+        using var service = CreateProbeService(logService);
+
+        for (var i = 0; i < 9; i++)
+        {
+            InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（2000 毫秒）");
+        }
+
+        Assert.Empty(logService.Entries);
+
+        InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（2000 毫秒）");
+
+        Assert.Single(logService.Entries);
+        Assert.Contains(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("HTTP 心跳探测连续失败 10 次", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ProbeFailureWarning_IsIndependent_ForWebSocketDisposed()
+    {
+        var logService = new RecordingLogService();
+        using var service = CreateProbeService(logService);
+
+        for (var i = 0; i < 9; i++)
+        {
+            InvokePrivateVoidMethod(service, "ReportWebSocketDisposedProbeFailure", "Cannot access a disposed object.");
+        }
+
+        Assert.Empty(logService.Entries);
+
+        InvokePrivateVoidMethod(service, "ReportWebSocketDisposedProbeFailure", "Cannot access a disposed object.");
+
+        Assert.Single(logService.Entries);
+        Assert.Contains(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("WebSocket 探测异常连续出现 10 次", StringComparison.Ordinal));
+    }
+
     private static T GetPrivateField<T>(object instance, string fieldName)
     {
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -239,12 +296,30 @@ public sealed class ProcessServiceTests
         return Assert.IsType<T>(field!.GetValue(instance));
     }
 
-    private static ProcessStartInfo? InvokeBuildStartInfo(ProcessService service, string comfyRootPath, string arguments)
+    private static void InvokePrivateVoidMethod(object instance, string methodName, params object[] args)
+    {
+        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(instance, args);
+    }
+
+    private static ProcessService CreateProbeService(ILogService logService)
+    {
+        return new ProcessService(
+            new ArgumentBuilder(),
+            new FakePythonPathService(),
+            new FakeProxyService(),
+            logService,
+            new FakeSettingsService(),
+            new ResiliencePolicyService(new FakeLogService()));
+    }
+
+    private static ProcessStartInfo? InvokeBuildStartInfo(ProcessService service, string comfyRootPath, string arguments, bool externalLaunchComfyUI)
     {
         var method = typeof(ProcessService).GetMethod("BuildStartInfo", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        return method!.Invoke(service, new object[] { comfyRootPath, arguments }) as ProcessStartInfo;
+        return method!.Invoke(service, new object[] { comfyRootPath, arguments, externalLaunchComfyUI }) as ProcessStartInfo;
     }
 
     private sealed class FakePythonPathService : IPythonPathService
@@ -323,6 +398,27 @@ public sealed class ProcessServiceTests
         public string GetPipMirrorArgs() => string.Empty;
     }
 
+    private sealed class FakeSettingsService : ISettingsService
+    {
+        public FakeSettingsService(AppSettings? settings = null)
+        {
+            Current = settings ?? new AppSettings();
+        }
+
+        public AppSettings Current { get; private set; }
+
+        public Task<AppSettings> LoadAsync()
+        {
+            return Task.FromResult(Current);
+        }
+
+        public Task SaveAsync(AppSettings settings)
+        {
+            Current = settings;
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class FakeLogService : ILogService
     {
         public event EventHandler<string>? LogReceived;
@@ -341,4 +437,32 @@ public sealed class ProcessServiceTests
         {
         }
     }
+
+    private sealed class RecordingLogService : ILogService
+    {
+        public event EventHandler<string>? LogReceived;
+
+        public event EventHandler<LogEntry>? LogEntryReceived;
+
+        public List<LogRecord> Entries { get; } = new();
+
+        public void Log(string message)
+        {
+            Log(message, GUILogLevel.Info);
+        }
+
+        public void Log(string message, GUILogLevel level)
+        {
+            Entries.Add(new LogRecord(message, level));
+            LogReceived?.Invoke(this, message);
+            LogEntryReceived?.Invoke(this, new LogEntry { Message = message, Level = level, Timestamp = DateTime.Now });
+        }
+
+        public void LogError(string message, Exception? exception = null)
+        {
+            Entries.Add(new LogRecord(exception == null ? message : $"{message}: {exception.Message}", GUILogLevel.Error));
+        }
+    }
+
+    private sealed record LogRecord(string Message, GUILogLevel Level);
 }

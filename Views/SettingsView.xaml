@@ -219,6 +219,12 @@
                                       Width="150" HorizontalAlignment="Left"/>
                             <TextBlock Text="控制台日志行高：紧凑=12，默认=15，宽松=18。"
                                        FontSize="12" Opacity="0.5" Margin="0,6,0,0"/>
+
+                            <CheckBox IsChecked="{Binding Settings.ExternalLaunchComfyUI}" Margin="0,18,0,0">
+                                <TextBlock Text="外部启动 ComfyUI" FontSize="14" FontWeight="Medium"/>
+                            </CheckBox>
+                            <TextBlock Text="开启后改为独立窗口启动 ComfyUI，不再将原始输出内联到本程序。"
+                                       FontSize="12" Opacity="0.5" Margin="22,6,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                 </Expander>

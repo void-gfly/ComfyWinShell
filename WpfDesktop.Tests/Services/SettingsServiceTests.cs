@@ -31,6 +31,23 @@ public sealed class SettingsServiceTests : IDisposable
         Assert.True(reloaded.ShowSelectedGpuOnly);
     }
 
+    [Fact]
+    public async Task SaveAndLoadAsync_PreservesExternalLaunchComfyUI()
+    {
+        var service = CreateService();
+        var settings = new AppSettings
+        {
+            DataRoot = _tempRoot,
+            ExternalLaunchComfyUI = true
+        };
+
+        await service.SaveAsync(settings);
+
+        var reloaded = await CreateService().LoadAsync();
+
+        Assert.True(reloaded.ExternalLaunchComfyUI);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))
