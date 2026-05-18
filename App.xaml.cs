@@ -38,16 +38,20 @@ namespace WpfDesktop
             // 隐藏窗口到托盘时不自动退出应用
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             TryAttachParentConsole();
+            InitializeFileLogging();
 
             try
             {
+                LogStartupContext(nameof(OnStartup));
                 EnsureDefaultAppSettingsFileExists();
                 ShowStartupSplash();
 
                 var startupSettings = LoadStartupAppSettings();
+                LogStartupSettings(startupSettings);
                 _instanceLock = AppInstanceLockHelper.TryAcquire(startupSettings.AppName);
                 if (_instanceLock == null)
                 {
+                    FileLogWriter.Log(nameof(App), "同一个 AppName 的程序实例已经在运行。", GUILogLevel.Warning);
                     CloseStartupSplash();
                     MessageBox.Show("同一个 AppName 的程序实例已经在运行。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                     Shutdown();
@@ -88,6 +92,10 @@ namespace WpfDesktop
                 {
                     Debug.WriteLine($"退出时清理 ComfyUI 进程失败: {ex}");
                     _logService?.LogError("退出时清理 ComfyUI 进程失败", ex);
+                    if (_logService == null)
+                    {
+                        FileLogWriter.LogError(nameof(App), "退出时清理 ComfyUI 进程失败", ex);
+                    }
                 }
 
                 _host.StopAsync().GetAwaiter().GetResult();
@@ -188,6 +196,7 @@ namespace WpfDesktop
             try
             {
                 _host = await Task.Run(CreateAndStartHost);
+                FileLogWriter.Log(nameof(App), "主机已启动。", GUILogLevel.Success);
 
                 // 获取 LogService 用于全局异常处理
                 _logService = _host.Services.GetRequiredService<ILogService>();
@@ -197,6 +206,7 @@ namespace WpfDesktop
                 MainWindow = mainWindow;
                 CloseStartupSplash();
                 mainWindow.Show();
+                _logService.Log("主窗口已显示。", GUILogLevel.Success);
             }
             catch (Exception ex)
             {
@@ -291,11 +301,26 @@ namespace WpfDesktop
 
                 if (GlobalExceptionPolicy.IsRecoverableNetworkException(exception))
                 {
-                    _logService?.Log($"{source}: {exception?.GetType().Name ?? "Exception"} - {exception?.Message ?? "(null)"}", GUILogLevel.Warning);
+                    var message = $"{source}: {exception?.GetType().Name ?? "Exception"} - {exception?.Message ?? "(null)"}";
+                    if (_logService != null)
+                    {
+                        _logService.Log(message, GUILogLevel.Warning);
+                    }
+                    else
+                    {
+                        FileLogWriter.WriteRaw(details);
+                    }
                 }
                 else
                 {
-                    _logService?.LogError(source, exception);
+                    if (_logService != null)
+                    {
+                        _logService.LogError(source, exception);
+                    }
+                    else
+                    {
+                        FileLogWriter.WriteRaw(details);
+                    }
                 }
             }
             catch
@@ -331,12 +356,53 @@ namespace WpfDesktop
                 var details = BuildExceptionDetails(exception, source);
                 Console.Error.WriteLine(details);
                 Debug.WriteLine(details);
-                _logService?.LogError(source, exception);
+
+                if (_logService != null)
+                {
+                    _logService.LogError(source, exception);
+                }
+                else
+                {
+                    FileLogWriter.WriteRaw(details);
+                }
             }
             catch
             {
                 // 记录失败不应影响异常收口。
             }
+        }
+
+        private static void InitializeFileLogging()
+        {
+            var logDirectory = FileLogWriter.Initialize(AppContext.BaseDirectory, retentionDays: 14);
+            if (!string.IsNullOrWhiteSpace(logDirectory))
+            {
+                FileLogWriter.Log(nameof(App), $"文件日志已初始化，目录: {logDirectory}", GUILogLevel.Success);
+            }
+            else
+            {
+                Debug.WriteLine("文件日志初始化失败，后续仅保留 Console/Debug 输出。");
+            }
+        }
+
+        private static void LogStartupContext(string source)
+        {
+            FileLogWriter.Log(source, $"程序集: {typeof(App).Assembly.GetName().Name}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"版本: {typeof(App).Assembly.GetName().Version}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"进程 ID: {Environment.ProcessId}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"进程路径: {Environment.ProcessPath ?? "(null)"}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"命令行: {Environment.CommandLine}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"当前目录: {Environment.CurrentDirectory}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"基础目录: {AppContext.BaseDirectory}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $"OS: {Environment.OSVersion}", GUILogLevel.Info);
+            FileLogWriter.Log(source, $".NET: {Environment.Version}", GUILogLevel.Info);
+        }
+
+        private static void LogStartupSettings(AppSettings startupSettings)
+        {
+            FileLogWriter.Log(nameof(App), $"AppName: {startupSettings.AppName}", GUILogLevel.Info);
+            FileLogWriter.Log(nameof(App), $"DataRoot: {startupSettings.DataRoot}", GUILogLevel.Info);
+            FileLogWriter.Log(nameof(App), $"PythonRoot: {startupSettings.PythonRoot}", GUILogLevel.Info);
         }
 
         private static string BuildExceptionDetails(Exception? exception, string source)

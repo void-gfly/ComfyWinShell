@@ -48,6 +48,8 @@ public class LogService : ILogService
 
         // 触发旧事件（向后兼容）
         LogReceived?.Invoke(this, $"[{timestamp}] {legacyMessage}");
+
+        FileLogWriter.Log(nameof(LogService), legacyMessage, level);
     }
 
     /// <summary>
@@ -71,15 +73,7 @@ public class LogService : ILogService
             LogEntryReceived?.Invoke(this, entry);
             LogReceived?.Invoke(this, $"[{timestamp}] [ERROR] {errorMessage}");
 
-            // 堆栈信息
-            var stackEntry = new LogEntry
-            {
-                Message = $"[STACK] {exception.StackTrace}",
-                Level = GUILogLevel.Error,
-                Timestamp = DateTime.Now
-            };
-            LogEntryReceived?.Invoke(this, stackEntry);
-            LogReceived?.Invoke(this, $"[{timestamp}] [STACK] {exception.StackTrace}");
+            FileLogWriter.LogError(nameof(LogService), message, exception);
         }
         else
         {
@@ -91,6 +85,8 @@ public class LogService : ILogService
             };
             LogEntryReceived?.Invoke(this, entry);
             LogReceived?.Invoke(this, $"[{timestamp}] [ERROR] {message}");
+
+            FileLogWriter.LogError(nameof(LogService), message);
         }
     }
 
