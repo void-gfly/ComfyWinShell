@@ -86,6 +86,33 @@ public sealed class ConfigurationServiceTests : IDisposable
         Assert.Equal(1, reloaded.Device.CudaDevice);
     }
 
+    [Fact]
+    public async Task SaveAndLoadAsync_PreservesAllowRemoteCustomNodeInstall()
+    {
+        var service = CreateService();
+        var configuration = new ComfyConfiguration
+        {
+            Network = new NetworkConfiguration
+            {
+                AllowRemoteCustomNodeInstall = true
+            }
+        };
+
+        await service.SaveConfigurationAsync("default", configuration);
+
+        var reloaded = await service.LoadConfigurationAsync("default");
+
+        Assert.True(reloaded.Network.AllowRemoteCustomNodeInstall);
+    }
+
+    [Fact]
+    public void NewConfiguration_DefaultsAllowRemoteCustomNodeInstallToFalse()
+    {
+        var configuration = new ComfyConfiguration();
+
+        Assert.False(configuration.Network.AllowRemoteCustomNodeInstall);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))

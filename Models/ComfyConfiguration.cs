@@ -117,6 +117,12 @@ public partial class NetworkConfiguration : ObservableObject
     /// </summary>
     [ObservableProperty]
     private double _maxUploadSizeMb = 100;
+
+    /// <summary>
+    /// 是否允许 ComfyUI-Manager 从远程 Git URL 和 pip 安装自定义节点。
+    /// </summary>
+    [ObservableProperty]
+    private bool _allowRemoteCustomNodeInstall;
 }
 
 /// <summary>

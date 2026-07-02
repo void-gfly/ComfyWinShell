@@ -24,6 +24,7 @@ public sealed class ConfigurationViewModelTests
             new FakeComfyPathService(),
             new FakeProfileService(),
             new FakeHardwareMonitorService(),
+            new FakeComfyManagerSettingsService(),
             new ArgumentBuilder(),
             new FakeDialogService(),
             new FakeLogService());
@@ -54,6 +55,7 @@ public sealed class ConfigurationViewModelTests
             new FakeComfyPathService(),
             new FakeProfileService(),
             new FakeHardwareMonitorService(),
+            new FakeComfyManagerSettingsService(),
             new ArgumentBuilder(),
             new FakeDialogService(),
             new FakeLogService());
@@ -82,6 +84,7 @@ public sealed class ConfigurationViewModelTests
             new FakeComfyPathService(),
             new FakeProfileService(),
             new FakeHardwareMonitorService(),
+            new FakeComfyManagerSettingsService(),
             new ArgumentBuilder(),
             new FakeDialogService(),
             logService);
@@ -106,6 +109,7 @@ public sealed class ConfigurationViewModelTests
             new FakeComfyPathService(),
             new FakeProfileService(),
             new FakeHardwareMonitorService(),
+            new FakeComfyManagerSettingsService(),
             new ArgumentBuilder(),
             new FakeDialogService(),
             new FakeLogService());
@@ -136,6 +140,7 @@ public sealed class ConfigurationViewModelTests
             new FakeComfyPathService(),
             new FakeProfileService(),
             new FakeHardwareMonitorService(),
+            new FakeComfyManagerSettingsService(),
             new ArgumentBuilder(),
             new FakeDialogService(),
             logService);
@@ -252,6 +257,14 @@ public sealed class ConfigurationViewModelTests
 
         public void Refresh()
         {
+        }
+    }
+
+    private sealed class FakeComfyManagerSettingsService : IComfyManagerSettingsService
+    {
+        public Task ApplyRemoteCustomNodeInstallAsync(string comfyUiPath, string? userDirectory, bool enabled)
+        {
+            return Task.CompletedTask;
         }
     }
 

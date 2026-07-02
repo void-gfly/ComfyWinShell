@@ -39,6 +39,9 @@ namespace WpfDesktop
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             TryAttachParentConsole();
             InitializeFileLogging();
+            ProcessPowerModeService.TryDisableEfficiencyMode(
+                Process.GetCurrentProcess(),
+                message => FileLogWriter.Log(nameof(App), message, GUILogLevel.Warning));
 
             try
             {
@@ -241,6 +244,7 @@ namespace WpfDesktop
                     services.AddSingleton<IPythonPathService, PythonPathService>();
                     services.AddSingleton<ICudaDeviceDiscoveryService, CudaDeviceDiscoveryService>();
                     services.AddSingleton<IProxyService, ProxyService>();
+                    services.AddSingleton<IComfyManagerSettingsService, ComfyManagerSettingsService>();
                     services.AddSingleton<IGitService, GitService>();
                     services.AddSingleton<IProcessService, ProcessService>();
                     services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();

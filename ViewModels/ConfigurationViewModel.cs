@@ -23,6 +23,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     private readonly IComfyPathService _comfyPathService;
     private readonly IProfileService _profileService;
     private readonly IHardwareMonitorService _hardwareMonitorService;
+    private readonly IComfyManagerSettingsService _comfyManagerSettingsService;
     private readonly ArgumentBuilder _argumentBuilder;
     private readonly IDialogService _dialogService;
     private readonly ILogService _logService;
@@ -38,6 +39,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         IComfyPathService comfyPathService,
         IProfileService profileService,
         IHardwareMonitorService hardwareMonitorService,
+        IComfyManagerSettingsService comfyManagerSettingsService,
         ArgumentBuilder argumentBuilder,
         IDialogService dialogService,
         ILogService logService)
@@ -46,6 +48,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         _comfyPathService = comfyPathService;
         _profileService = profileService;
         _hardwareMonitorService = hardwareMonitorService;
+        _comfyManagerSettingsService = comfyManagerSettingsService;
         _argumentBuilder = argumentBuilder;
         _dialogService = dialogService;
         _logService = logService;
@@ -195,6 +198,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         try
         {
             await _configurationService.SaveConfigurationAsync(_currentProfileId, Configuration);
+            await SyncComfyManagerRemoteInstallSettingsAsync();
             WeakReferenceMessenger.Default.Send(new ComfyConfigurationChangedMessage(_currentProfileId));
             
             // 如果设置了扩展模型目录，自动生成 extra_model_paths.yaml
@@ -252,6 +256,24 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
                 Configuration.Paths.UserDirectory = selected;
                 break;
         }
+    }
+
+    private async Task SyncComfyManagerRemoteInstallSettingsAsync()
+    {
+        if (!_comfyPathService.IsValid || string.IsNullOrWhiteSpace(_comfyPathService.ComfyUiPath))
+        {
+            if (Configuration.Network.AllowRemoteCustomNodeInstall)
+            {
+                _logService.Log("无法同步 ComfyUI-Manager 远程安装配置：未检测到有效的 ComfyUI 路径。", GUILogLevel.Warning);
+            }
+
+            return;
+        }
+
+        await _comfyManagerSettingsService.ApplyRemoteCustomNodeInstallAsync(
+            _comfyPathService.ComfyUiPath,
+            Configuration.Paths.UserDirectory,
+            Configuration.Network.AllowRemoteCustomNodeInstall);
     }
 
     private void AttachConfigurationHandlers(ComfyConfiguration configuration)

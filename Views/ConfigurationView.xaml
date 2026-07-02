@@ -194,6 +194,10 @@
                                     <TextBox Text="{Binding Configuration.Network.TlsCertFile, UpdateSourceTrigger=PropertyChanged}"/>
                                 </StackPanel>
                             </Grid>
+                            <CheckBox Content="允许远程安装自定义节点"
+                                      IsChecked="{Binding Configuration.Network.AllowRemoteCustomNodeInstall}"
+                                      Margin="0,14,0,0"
+                                      ToolTip="保存后写入 ComfyUI-Manager 的 allow_git_url_install 和 allow_pip_install。默认关闭；ComfyUI-Manager 在非本地监听地址下仍会拒绝这些远程安装入口。"/>
                         </StackPanel>
                     </Border>
                 </Expander>

@@ -194,6 +194,33 @@ public sealed class ProcessServiceTests
     }
 
     [Fact]
+    public void CreateDisableExecutionSpeedThrottlingState_ClearsEcoQosExecutionSpeedPolicy()
+    {
+        var state = ProcessPowerModeService.CreateDisableExecutionSpeedThrottlingState();
+
+        Assert.Equal(1u, state.Version);
+        Assert.Equal(ProcessPowerModeService.ProcessPowerThrottlingExecutionSpeed, state.ControlMask);
+        Assert.Equal(0u, state.StateMask);
+    }
+
+    [Theory]
+    [InlineData(ProcessPriorityClass.Idle, true)]
+    [InlineData(ProcessPriorityClass.BelowNormal, true)]
+    [InlineData(ProcessPriorityClass.Normal, false)]
+    [InlineData(ProcessPriorityClass.AboveNormal, false)]
+    [InlineData(ProcessPriorityClass.High, false)]
+    public void ShouldRestoreNormalPriority_ReturnsTrueOnlyForEfficiencyModePriority(ProcessPriorityClass priorityClass, bool expected)
+    {
+        Assert.Equal(expected, ProcessPowerModeService.ShouldRestoreNormalPriority(priorityClass));
+    }
+
+    [Fact]
+    public void ProcessModeBackgroundEnd_UsesWindowsBackgroundModeEndFlag()
+    {
+        Assert.Equal(0x00200000u, ProcessPowerModeService.ProcessModeBackgroundEnd);
+    }
+
+    [Fact]
     public void DecodeComfyOutputBytes_PrefersUtf8_ForUnicodeProgressBars()
     {
         var bytes = Encoding.UTF8.GetBytes(" 50%|██▌     | 2/4");

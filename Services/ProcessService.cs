@@ -237,6 +237,10 @@ public class ProcessService : IProcessService, IDisposable
             var started = _process.Start();
             if (started)
             {
+                ProcessPowerModeService.TryDisableEfficiencyMode(
+                    _process,
+                    message => _logService.Log(message, GUILogLevel.Warning));
+
                 lock (_statusLock)
                 {
                     _status.State = ProcessState.Running;
