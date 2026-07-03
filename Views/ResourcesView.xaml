@@ -124,67 +124,106 @@
 
                 <!-- 自定义节点 Tab -->
                 <TabItem Header="自定义节点">
-                    <ListView ItemsSource="{Binding CustomNodes}"
-                              BorderThickness="0"
-                              Background="Transparent"
-                              Margin="0,10,0,0">
-                        <ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="节点名称" Width="250">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Name}" 
-                                                       FontWeight="SemiBold" 
-                                                       Foreground="{DynamicResource PrimaryTextBrush}"
-                                                       ToolTip="{Binding Path}"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="Git 仓库" Width="80">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock>
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Text" Value="否"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsGitRepo}" Value="True">
-                                                                <Setter Property="Text" Value="是"/>
-                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="远程地址" Width="350">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding GitRemoteUrl}" 
-                                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding GitRemoteUrl}"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="操作" Width="80">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <Button Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding Path}"
-                                                    Content="打开"
-                                                    Padding="8,2"
-                                                    FontSize="11"
-                                                    Style="{DynamicResource SecondaryButtonStyle}"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
+                    <Grid Margin="0,10,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0"
+                                Background="#101010"
+                                BorderBrush="#333"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0"
+                                           Text="GitHub 链接"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding CustomNodeRepositoryUrl, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="例如 https://github.com/Comfy-Org/ComfyUI-Manager"
+                                         VerticalAlignment="Center"/>
+                                <Button Grid.Column="2"
+                                        Content="安装节点"
+                                        Command="{Binding InstallCustomNodeCommand}"
+                                        Style="{DynamicResource PrimaryButtonStyle}"
+                                        Padding="14,6"
+                                        Margin="10,0,0,0"/>
+                            </Grid>
+                        </Border>
+
+                        <ListView Grid.Row="1"
+                                  ItemsSource="{Binding CustomNodes}"
+                                  BorderThickness="0"
+                                  Background="Transparent">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="节点名称" Width="250">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" 
+                                                           FontWeight="SemiBold" 
+                                                           Foreground="{DynamicResource PrimaryTextBrush}"
+                                                           ToolTip="{Binding Path}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Git 仓库" Width="80">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock>
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="否"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsGitRepo}" Value="True">
+                                                                    <Setter Property="Text" Value="是"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="远程地址" Width="350">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding GitRemoteUrl}" 
+                                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding GitRemoteUrl}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="操作" Width="80">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding Path}"
+                                                        Content="打开"
+                                                        Padding="8,2"
+                                                        FontSize="11"
+                                                        Style="{DynamicResource SecondaryButtonStyle}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Grid>
                 </TabItem>
 
                 <!-- 模型 Tab -->

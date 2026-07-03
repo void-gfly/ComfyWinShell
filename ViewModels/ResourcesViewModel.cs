@@ -19,6 +19,9 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
     private readonly IResourceService _resourceService;
     private readonly ILogService _logService;
     private readonly IWorkflowAnalyzerService _workflowAnalyzerService;
+    private readonly ICustomNodeInstallerService _customNodeInstallerService;
+    private readonly IProcessService _processService;
+    private readonly IDialogService _dialogService;
     private string _workflowSortProperty = WorkflowSortingHelper.DefaultProperty;
     private ListSortDirection _workflowSortDirection = WorkflowSortingHelper.DefaultDirection;
 
@@ -26,12 +29,18 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         IComfyPathService comfyPathService,
         IResourceService resourceService,
         ILogService logService,
-        IWorkflowAnalyzerService workflowAnalyzerService)
+        IWorkflowAnalyzerService workflowAnalyzerService,
+        ICustomNodeInstallerService customNodeInstallerService,
+        IProcessService processService,
+        IDialogService dialogService)
     {
         _comfyPathService = comfyPathService;
         _resourceService = resourceService;
         _logService = logService;
         _workflowAnalyzerService = workflowAnalyzerService;
+        _customNodeInstallerService = customNodeInstallerService;
+        _processService = processService;
+        _dialogService = dialogService;
     }
 
     #region Properties
@@ -76,6 +85,14 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
 
     [ObservableProperty]
     private string _totalExtraModelSize = "计算中...";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallCustomNodeCommand))]
+    private string _customNodeRepositoryUrl = "";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallCustomNodeCommand))]
+    private bool _isInstallingCustomNode;
 
     #endregion
 
@@ -197,6 +214,73 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
             _logService.LogError("打开工作流分析器失败", ex);
             StatusMessage = $"分析失败: {ex.Message}";
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanInstallCustomNode))]
+    private async Task InstallCustomNodeAsync()
+    {
+        var repositoryUrl = CustomNodeRepositoryUrl.Trim();
+        if (string.IsNullOrWhiteSpace(repositoryUrl))
+        {
+            StatusMessage = "请输入 GitHub 仓库链接";
+            return;
+        }
+
+        try
+        {
+            IsInstallingCustomNode = true;
+            StatusMessage = "正在准备安装自定义节点...";
+
+            var status = await _processService.GetStatusAsync();
+            if (status?.IsRunning == true)
+            {
+                var shouldStop = _dialogService.Confirm(
+                    "ComfyUI 当前正在运行。安装自定义节点会修改节点目录和 Python 依赖，建议先停止 ComfyUI。\n\n是否现在停止并继续安装？",
+                    "安装自定义节点");
+                if (!shouldStop)
+                {
+                    StatusMessage = "已取消安装";
+                    return;
+                }
+
+                StatusMessage = "正在停止 ComfyUI...";
+                var stopped = await _processService.StopAsync();
+                if (!stopped)
+                {
+                    StatusMessage = "停止 ComfyUI 失败，已取消安装";
+                    return;
+                }
+            }
+
+            StatusMessage = "正在安装自定义节点...";
+            var result = await _customNodeInstallerService.InstallAsync(repositoryUrl);
+            if (!result.Success)
+            {
+                StatusMessage = $"安装失败: {result.ErrorMessage}";
+                _dialogService.ShowError(result.ErrorMessage, "安装自定义节点失败");
+                return;
+            }
+
+            await LoadCustomNodesAsync();
+            CustomNodeRepositoryUrl = "";
+            StatusMessage = $"已安装自定义节点: {result.NodeName}";
+            _dialogService.ShowInfo("自定义节点已安装完成。请重新启动 ComfyUI 让节点生效。", "安装完成");
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("安装自定义节点失败", ex);
+            StatusMessage = $"安装失败: {ex.Message}";
+            _dialogService.ShowError(ex.Message, "安装自定义节点失败");
+        }
+        finally
+        {
+            IsInstallingCustomNode = false;
+        }
+    }
+
+    private bool CanInstallCustomNode()
+    {
+        return !IsLoading && !IsInstallingCustomNode && !string.IsNullOrWhiteSpace(CustomNodeRepositoryUrl);
     }
 
     [RelayCommand(CanExecute = nameof(CanSelectAllWorkflows))]
@@ -480,6 +564,7 @@ public partial class ResourcesViewModel : ViewModelBase, INavigationAware
         BatchPackageWorkflowsCommand.NotifyCanExecuteChanged();
         SelectAllWorkflowsCommand.NotifyCanExecuteChanged();
         UnselectAllWorkflowsCommand.NotifyCanExecuteChanged();
+        InstallCustomNodeCommand.NotifyCanExecuteChanged();
     }
 
     private void OnWorkflowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

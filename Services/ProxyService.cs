@@ -135,39 +135,37 @@ public class ProxyService : IProxyService
     public void ConfigureProcessProxy(ProcessStartInfo startInfo)
     {
         var proxy = _settingsMonitor.CurrentValue.Proxy;
-        if (!proxy.Enabled || string.IsNullOrWhiteSpace(proxy.Server))
+        if (proxy.Enabled && !string.IsNullOrWhiteSpace(proxy.Server))
         {
-            return;
+            // 配置 HTTP 和 HTTPS 代理环境变量
+            // 这些环境变量会被 Python (pip, urllib), Git, Node.js 等工具识别
+            startInfo.Environment["HTTP_PROXY"] = proxy.Server;
+            startInfo.Environment["HTTPS_PROXY"] = proxy.Server;
+            startInfo.Environment["http_proxy"] = proxy.Server;
+            startInfo.Environment["https_proxy"] = proxy.Server;
+
+            // 配置认证信息（如果提供）
+            if (!string.IsNullOrWhiteSpace(proxy.Username) && !string.IsNullOrWhiteSpace(proxy.Password))
+            {
+                var credentials = $"{proxy.Username}:{proxy.Password}@";
+                var serverWithAuth = proxy.Server.Replace("://", $"://{credentials}");
+
+                startInfo.Environment["HTTP_PROXY"] = serverWithAuth;
+                startInfo.Environment["HTTPS_PROXY"] = serverWithAuth;
+                startInfo.Environment["http_proxy"] = serverWithAuth;
+                startInfo.Environment["https_proxy"] = serverWithAuth;
+            }
+
+            // 配置 Git 专用代理（优先级高于环境变量）
+            startInfo.Environment["GIT_HTTP_PROXY_AUTHMETHOD"] = "basic";
+            
+            // 配置 pip 代理（某些版本的 pip 需要这个）
+            startInfo.Environment["PIP_PROXY"] = proxy.Server;
+
+            // 配置不使用代理的地址（本地地址）
+            startInfo.Environment["NO_PROXY"] = "localhost,127.0.0.1,::1";
+            startInfo.Environment["no_proxy"] = "localhost,127.0.0.1,::1";
         }
-
-        // 配置 HTTP 和 HTTPS 代理环境变量
-        // 这些环境变量会被 Python (pip, urllib), Git, Node.js 等工具识别
-        startInfo.Environment["HTTP_PROXY"] = proxy.Server;
-        startInfo.Environment["HTTPS_PROXY"] = proxy.Server;
-        startInfo.Environment["http_proxy"] = proxy.Server;
-        startInfo.Environment["https_proxy"] = proxy.Server;
-
-        // 配置认证信息（如果提供）
-        if (!string.IsNullOrWhiteSpace(proxy.Username) && !string.IsNullOrWhiteSpace(proxy.Password))
-        {
-            var credentials = $"{proxy.Username}:{proxy.Password}@";
-            var serverWithAuth = proxy.Server.Replace("://", $"://{credentials}");
-
-            startInfo.Environment["HTTP_PROXY"] = serverWithAuth;
-            startInfo.Environment["HTTPS_PROXY"] = serverWithAuth;
-            startInfo.Environment["http_proxy"] = serverWithAuth;
-            startInfo.Environment["https_proxy"] = serverWithAuth;
-        }
-
-        // 配置 Git 专用代理（优先级高于环境变量）
-        startInfo.Environment["GIT_HTTP_PROXY_AUTHMETHOD"] = "basic";
-        
-        // 配置 pip 代理（某些版本的 pip 需要这个）
-        startInfo.Environment["PIP_PROXY"] = proxy.Server;
-
-        // 配置不使用代理的地址（本地地址）
-        startInfo.Environment["NO_PROXY"] = "localhost,127.0.0.1,::1";
-        startInfo.Environment["no_proxy"] = "localhost,127.0.0.1,::1";
 
         // 配置 pip 镜像源（通过环境变量）
         var pip = _settingsMonitor.CurrentValue.PipMirror;
