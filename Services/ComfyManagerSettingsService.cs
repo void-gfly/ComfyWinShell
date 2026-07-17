@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
@@ -20,7 +21,7 @@ public sealed class ComfyManagerSettingsService : IComfyManagerSettingsService
             throw new ArgumentException("ComfyUI path cannot be empty.", nameof(comfyUiPath));
         }
 
-        var configPath = GetManagerConfigPath(comfyUiPath, userDirectory);
+        var configPath = await GetManagerConfigPathAsync(comfyUiPath, userDirectory);
         if (!enabled && !File.Exists(configPath))
         {
             return;
@@ -38,13 +39,32 @@ public sealed class ComfyManagerSettingsService : IComfyManagerSettingsService
         await File.WriteAllLinesAsync(configPath, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    private static string GetManagerConfigPath(string comfyUiPath, string? userDirectory)
+    private static async Task<string> GetManagerConfigPathAsync(string comfyUiPath, string? userDirectory)
     {
         var rootUserDirectory = string.IsNullOrWhiteSpace(userDirectory)
             ? Path.Combine(comfyUiPath, "user")
             : userDirectory;
 
-        return Path.Combine(rootUserDirectory, "default", "ComfyUI-Manager", "config.ini");
+        var managerDirectory = await HasSystemUserDirectoryApiAsync(comfyUiPath)
+            ? Path.Combine(rootUserDirectory, "__manager")
+            : Path.Combine(rootUserDirectory, "default", "ComfyUI-Manager");
+
+        return Path.Combine(managerDirectory, "config.ini");
+    }
+
+    private static async Task<bool> HasSystemUserDirectoryApiAsync(string comfyUiPath)
+    {
+        var folderPathsFile = Path.Combine(comfyUiPath, "folder_paths.py");
+        if (!File.Exists(folderPathsFile))
+        {
+            return false;
+        }
+
+        var source = await File.ReadAllTextAsync(folderPathsFile, Encoding.UTF8);
+        return Regex.IsMatch(
+            source,
+            @"^\s*def\s+get_system_user_directory\s*\(",
+            RegexOptions.Multiline | RegexOptions.CultureInvariant);
     }
 
     private static void UpsertDefaultKey(List<string> lines, string key, bool enabled)
