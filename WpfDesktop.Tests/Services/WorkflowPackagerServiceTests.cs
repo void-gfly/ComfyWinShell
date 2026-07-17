@@ -8,6 +8,40 @@ namespace WpfDesktop.Tests.Services;
 public sealed class WorkflowPackagerServiceTests
 {
     [Fact]
+    public async Task PackageWorkflowAsync_PreservesGitMetadataForPortableUpdates()
+    {
+        using var tempRoot = new TempDirectory();
+        var comfyRootPath = Path.Combine(tempRoot.Path, "source");
+        var comfyUiPath = Path.Combine(comfyRootPath, "ComfyUI");
+        var workflowPath = Path.Combine(tempRoot.Path, "sample.json");
+        var targetRoot = Path.Combine(tempRoot.Path, "target");
+
+        Directory.CreateDirectory(Path.Combine(comfyUiPath, ".git"));
+        Directory.CreateDirectory(Path.Combine(comfyUiPath, "custom_nodes", "SampleNode", ".git"));
+        await File.WriteAllTextAsync(Path.Combine(comfyUiPath, "main.py"), "print('ComfyUI')");
+        await File.WriteAllTextAsync(Path.Combine(comfyUiPath, ".git", "config"), "[remote \"origin\"]");
+        await File.WriteAllTextAsync(
+            Path.Combine(comfyUiPath, "custom_nodes", "SampleNode", ".git", "config"),
+            "[remote \"origin\"]");
+        await File.WriteAllTextAsync(workflowPath, "{}");
+
+        var service = CreateService(comfyUiPath, comfyRootPath);
+        var result = await service.PackageWorkflowAsync(
+            new WorkflowAnalysisResult
+            {
+                WorkflowName = "sample.json",
+                WorkflowPath = workflowPath,
+                RequiredModels = []
+            },
+            targetRoot);
+
+        Assert.True(result.Success);
+        Assert.True(File.Exists(Path.Combine(targetRoot, "ComfyUI", ".git", "config")));
+        Assert.True(File.Exists(
+            Path.Combine(targetRoot, "ComfyUI", "custom_nodes", "SampleNode", ".git", "config")));
+    }
+
+    [Fact]
     public async Task PackageWorkflowModelsOnlyAsync_CopiesModelsIntoModelsDirectory_AndKeepsExistingFiles()
     {
         using var tempRoot = new TempDirectory();
@@ -105,16 +139,27 @@ public sealed class WorkflowPackagerServiceTests
         Assert.True(File.Exists(Path.Combine(targetRoot, "models", "loras", "shared.safetensors")));
     }
 
-    private static WorkflowPackagerService CreateService()
+    private static WorkflowPackagerService CreateService(
+        string? comfyUiPath = null,
+        string? comfyRootPath = null)
     {
-        return new WorkflowPackagerService(new DummyComfyPathService(), new RecordingLogService());
+        return new WorkflowPackagerService(
+            new DummyComfyPathService(comfyUiPath, comfyRootPath),
+            new RecordingLogService());
     }
 
     private sealed class DummyComfyPathService : IComfyPathService
     {
-        public string? ComfyUiPath { get; private set; }
-        public string? ComfyRootPath { get; private set; }
-        public bool IsValid { get; private set; }
+        public DummyComfyPathService(string? comfyUiPath = null, string? comfyRootPath = null)
+        {
+            ComfyUiPath = comfyUiPath;
+            ComfyRootPath = comfyRootPath;
+            IsValid = !string.IsNullOrWhiteSpace(comfyUiPath) && !string.IsNullOrWhiteSpace(comfyRootPath);
+        }
+
+        public string? ComfyUiPath { get; }
+        public string? ComfyRootPath { get; }
+        public bool IsValid { get; }
         public string? ErrorMessage { get; private set; }
 
         public void Refresh()

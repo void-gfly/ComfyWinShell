@@ -409,7 +409,7 @@ public class WorkflowPackagerService : IWorkflowPackagerService
     }
 
     /// <summary>
-    /// 复制 ComfyUI 核心文件（排除 models 目录）
+    /// 复制 ComfyUI 核心文件（排除 models 目录，保留 Git 仓库信息）
     /// </summary>
     /// <param name="sourcePath">源目录。</param>
     /// <param name="targetPath">目标目录。</param>
@@ -429,10 +429,9 @@ public class WorkflowPackagerService : IWorkflowPackagerService
         {
             "__pycache__", ".vscode", ".idea", "venv", ".venv"
         };
-        var nestedExcludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".git"
-        };
+        // 独立包需要保留 ComfyUI 及自定义节点的 Git 元数据，
+        // 否则打包后无法获取远程版本或执行更新。
+        var nestedExcludedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await Task.Run(() =>
         {
