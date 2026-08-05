@@ -12,13 +12,14 @@ namespace WpfDesktop.Tests.Services;
 public sealed class ProcessServiceTests
 {
     [Theory]
-    [InlineData("0.0.0.0", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
-    [InlineData("0.0.0.0,::", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
-    [InlineData("::", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
-    [InlineData("127.0.0.1", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
+    [InlineData("0.0.0.0", "http://127.0.0.1:8188/queue", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
+    [InlineData("0.0.0.0,::", "http://127.0.0.1:8188/queue", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
+    [InlineData("::", "http://127.0.0.1:8188/queue", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
+    [InlineData("127.0.0.1", "http://127.0.0.1:8188/queue", "http://127.0.0.1:8188/system_stats", "ws://127.0.0.1:8188/ws")]
     public void ConfigureApiEndpoint_NormalizesAllInterfaceListenAddress(
         string listen,
-        string expectedApiUrl,
+        string expectedHeartbeatUrl,
+        string expectedSystemStatsUrl,
         string expectedWsUrl)
     {
         using var service = new ProcessService(
@@ -31,7 +32,8 @@ public sealed class ProcessServiceTests
 
         service.ConfigureApiEndpoint(listen, 8188);
 
-        Assert.Equal(expectedApiUrl, GetPrivateField<string>(service, "_comfyApiUrl"));
+        Assert.Equal(expectedHeartbeatUrl, GetPrivateField<string>(service, "_comfyHeartbeatUrl"));
+        Assert.Equal(expectedSystemStatsUrl, GetPrivateField<string>(service, "_comfySystemStatsUrl"));
         Assert.Equal(expectedWsUrl, GetPrivateField<string>(service, "_comfyWsUrl"));
     }
 
@@ -282,17 +284,65 @@ public sealed class ProcessServiceTests
 
         for (var i = 0; i < 9; i++)
         {
-            InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（2000 毫秒）");
+            InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（10000 毫秒）");
         }
 
         Assert.Empty(logService.Entries);
 
-        InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（2000 毫秒）");
+        InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（10000 毫秒）");
 
         Assert.Single(logService.Entries);
         Assert.Contains(logService.Entries, entry =>
             entry.Level == GUILogLevel.Warning &&
             entry.Message.Contains("HTTP 心跳探测连续失败 10 次", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ProbeFailureWarning_IsSuppressedWhenSoftAliveFromRecentWebSocketActivity()
+    {
+        var logService = new RecordingLogService();
+        using var service = CreateProbeService(logService);
+
+        SetPrivateField(service, "_lastWebSocketActivityUtc", DateTime.UtcNow);
+
+        for (var i = 0; i < 30; i++)
+        {
+            InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（10000 毫秒）");
+        }
+
+        Assert.Empty(logService.Entries);
+    }
+
+    [Fact]
+    public void ProbeFailureWarning_IsNotSuppressedWhenWebSocketActivityIsStale()
+    {
+        var logService = new RecordingLogService();
+        using var service = CreateProbeService(logService);
+
+        SetPrivateField(service, "_lastWebSocketActivityUtc", DateTime.UtcNow.AddMinutes(-5));
+
+        for (var i = 0; i < 10; i++)
+        {
+            InvokePrivateVoidMethod(service, "ReportHeartbeatProbeFailure", "超时（10000 毫秒）");
+        }
+
+        Assert.Single(logService.Entries);
+        Assert.Contains(logService.Entries, entry =>
+            entry.Level == GUILogLevel.Warning &&
+            entry.Message.Contains("HTTP 心跳探测连续失败 10 次", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void MarkWebSocketActivity_SetsSoftAliveWindow()
+    {
+        using var service = CreateProbeService(new FakeLogService());
+
+        Assert.False(InvokePrivateBoolMethod(service, "IsSoftAlive"));
+
+        InvokePrivateVoidMethod(service, "MarkWebSocketActivity");
+
+        Assert.True(InvokePrivateBoolMethod(service, "IsSoftAlive"));
+        Assert.NotNull(GetPrivateField<DateTime?>(service, "_lastWebSocketActivityUtc"));
     }
 
     [Fact]
@@ -344,7 +394,14 @@ public sealed class ProcessServiceTests
     {
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(field);
-        return Assert.IsType<T>(field!.GetValue(instance));
+        return (T)field!.GetValue(instance)!;
+    }
+
+    private static void SetPrivateField(object instance, string fieldName, object? value)
+    {
+        var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(instance, value);
     }
 
     private static void InvokePrivateVoidMethod(object instance, string methodName, params object[] args)
@@ -352,6 +409,13 @@ public sealed class ProcessServiceTests
         var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         method!.Invoke(instance, args);
+    }
+
+    private static bool InvokePrivateBoolMethod(object instance, string methodName, params object[] args)
+    {
+        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsType<bool>(method!.Invoke(instance, args));
     }
 
     private static ProcessService CreateProbeService(ILogService logService)

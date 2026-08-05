@@ -19,8 +19,15 @@ public class ProcessService : IProcessService, IDisposable
     private const uint CtrlCEvent = 0;
     private const uint CtrlBreakEvent = 1;
     private const int HeartbeatIntervalMs = 3000;
-    private const int HeartbeatTimeoutMs = 2000;
+    /// <summary>轻量存活探测超时（/queue，不查询 CUDA VRAM）。</summary>
+    private const int HeartbeatTimeoutMs = 10000;
+    /// <summary>system_stats 低频刷新间隔（仅用于 UI 展示，不参与生死判定）。</summary>
+    private const int SystemStatsIntervalMs = 15000;
+    /// <summary>system_stats 单次请求超时（best-effort，失败不视为服务死亡）。</summary>
+    private const int SystemStatsTimeoutMs = 12000;
     private const int ProbeWarningThreshold = 10;
+    /// <summary>WebSocket 最近活动窗口：窗口内 HTTP 探测失败不当作需要 Warning 的离线信号。</summary>
+    private const int SoftAliveActivityWindowMs = 120000;
     private const int RecoveryWindowMs = 90000;
     private const int WebSocketReconnectDelayMs = 2000;
     private const int WebSocketInitialConnectDelayMs = 6000;
@@ -38,7 +45,10 @@ public class ProcessService : IProcessService, IDisposable
     private readonly Timer _heartbeatTimer;
     private Process? _process;
     private ProcessStatus _status = new();
-    private string _comfyApiUrl = "http://127.0.0.1:8188/system_stats";
+    /// <summary>轻量存活探测 URL（GET /queue）。</summary>
+    private string _comfyHeartbeatUrl = "http://127.0.0.1:8188/queue";
+    /// <summary>system_stats URL，仅用于 VRAM/系统信息展示。</summary>
+    private string _comfySystemStatsUrl = "http://127.0.0.1:8188/system_stats";
     private string _comfyWsUrl = "ws://127.0.0.1:8188/ws";
     private string? _lastPythonPath;
     private string? _lastMainPath;
@@ -48,6 +58,8 @@ public class ProcessService : IProcessService, IDisposable
     private bool _isDisposed;
     private bool _stopRequestedByUser;
     private DateTime? _recoveryDeadlineUtc;
+    private DateTime? _lastWebSocketActivityUtc;
+    private long _lastSystemStatsFetchTicks;
     private readonly object _statusLock = new();
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _webSocketCts;
@@ -134,7 +146,8 @@ public class ProcessService : IProcessService, IDisposable
     public void ConfigureApiEndpoint(string listen, int port)
     {
         var normalizedListen = IsAllInterfaceListenAddress(listen) ? "127.0.0.1" : listen;
-        _comfyApiUrl = $"http://{normalizedListen}:{port}/system_stats";
+        _comfyHeartbeatUrl = $"http://{normalizedListen}:{port}/queue";
+        _comfySystemStatsUrl = $"http://{normalizedListen}:{port}/system_stats";
         _comfyWsUrl = $"ws://{normalizedListen}:{port}/ws";
     }
 
@@ -448,6 +461,8 @@ public class ProcessService : IProcessService, IDisposable
     private void StartHeartbeat()
     {
         ResetHeartbeatProbeFailureCount();
+        _lastWebSocketActivityUtc = null;
+        Interlocked.Exchange(ref _lastSystemStatsFetchTicks, 0);
         _isHeartbeatEnabled = true;
         _lastHeartbeatSuccess = false;
         _heartbeatTimer.Change(HeartbeatIntervalMs, HeartbeatIntervalMs);
@@ -477,6 +492,9 @@ public class ProcessService : IProcessService, IDisposable
         {
             var httpAlive = await CheckHeartbeatAsync();
             var wsAlive = IsWebSocketAlive();
+            // system_stats 单独低频刷新，失败不影响存活判定
+            await MaybeRefreshSystemStatsAsync();
+
             if (!httpAlive && !wsAlive && ShouldSuppressHeartbeatProbeFailureNotice())
             {
                 return;
@@ -601,12 +619,12 @@ public class ProcessService : IProcessService, IDisposable
     }
 
     /// <summary>
-    /// 通过 system_stats 接口执行一次 HTTP 心跳检查。
+    /// 通过轻量 /queue 接口执行一次 HTTP 存活探测（不查询 CUDA VRAM）。
     /// </summary>
     /// <returns>接口可访问时返回 true，否则返回 false。</returns>
     private async Task<bool> CheckHeartbeatAsync()
     {
-        if (string.IsNullOrWhiteSpace(_comfyApiUrl))
+        if (string.IsNullOrWhiteSpace(_comfyHeartbeatUrl))
         {
             return false;
         }
@@ -615,14 +633,13 @@ public class ProcessService : IProcessService, IDisposable
 
         try
         {
-            using var response = await _httpClient.GetAsync(_comfyApiUrl, timeoutCts.Token);
+            using var response = await _httpClient.GetAsync(_comfyHeartbeatUrl, timeoutCts.Token);
             if (!response.IsSuccessStatusCode)
             {
+                ReportHeartbeatProbeFailure($"HTTP {(int)response.StatusCode}");
                 return false;
             }
 
-            var responseText = await response.Content.ReadAsStringAsync();
-            UpdateSystemStats(responseText);
             ResetHeartbeatProbeFailureCount();
             return true;
         }
@@ -643,6 +660,53 @@ public class ProcessService : IProcessService, IDisposable
             }
 
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 低频、best-effort 拉取 system_stats，用于 UI 展示；失败不影响存活状态。
+    /// </summary>
+    private async Task MaybeRefreshSystemStatsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_comfySystemStatsUrl))
+        {
+            return;
+        }
+
+        var nowTicks = Environment.TickCount64;
+        var elapsed = nowTicks - Volatile.Read(ref _lastSystemStatsFetchTicks);
+        if (elapsed >= 0 && elapsed < SystemStatsIntervalMs)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _lastSystemStatsFetchTicks, nowTicks);
+
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(SystemStatsTimeoutMs));
+
+        try
+        {
+            using var response = await _httpClient.GetAsync(_comfySystemStatsUrl, timeoutCts.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                Debug.WriteLine($"system_stats 刷新失败：HTTP {(int)response.StatusCode}");
+                return;
+            }
+
+            var responseText = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            UpdateSystemStats(responseText);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            Debug.WriteLine($"system_stats 刷新超时（{SystemStatsTimeoutMs} 毫秒）");
+        }
+        catch (Exception ex) when (GlobalExceptionPolicy.IsRecoverableNetworkException(ex))
+        {
+            Debug.WriteLine($"system_stats 刷新失败：{ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("system_stats 刷新异常", ex);
         }
     }
 
@@ -836,6 +900,7 @@ public class ProcessService : IProcessService, IDisposable
         {
             _lastHeartbeatSuccess = true;
         }
+        MarkWebSocketActivity();
         Interlocked.Exchange(ref _webSocketConnectProbeFailureCount, 0);
         Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
         _webSocketDisconnectedNotified = false;
@@ -869,6 +934,7 @@ public class ProcessService : IProcessService, IDisposable
         }
 
         Interlocked.Exchange(ref _webSocketDisposedProbeFailureCount, 0);
+        MarkWebSocketActivity();
 
         // 只要能收到消息就说明服务在线；再按类型输出少量诊断日志避免刷屏
         EvaluateLiveness(httpAlive: false, wsAlive: true);
@@ -903,12 +969,46 @@ public class ProcessService : IProcessService, IDisposable
     }
 
     /// <summary>
+    /// 记录 WebSocket 活动时间，用于高负载期间将 HTTP 超时视为“忙”而非离线。
+    /// </summary>
+    private void MarkWebSocketActivity()
+    {
+        _lastWebSocketActivityUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// 判断是否处于软在线：WebSocket 已打开或近期有 WS 活动（高负载下 HTTP 可能短暂无响应）。
+    /// </summary>
+    private bool IsSoftAlive()
+    {
+        if (IsWebSocketAlive())
+        {
+            return true;
+        }
+
+        var lastActivity = _lastWebSocketActivityUtc;
+        if (!lastActivity.HasValue)
+        {
+            return false;
+        }
+
+        return (DateTime.UtcNow - lastActivity.Value).TotalMilliseconds < SoftAliveActivityWindowMs;
+    }
+
+    /// <summary>
     /// 记录 HTTP 心跳探测失败，并在连续失败达到阈值时提醒一次。
+    /// 软在线（WS 打开或近期有进度活动）时不打 Warning，避免 GPU 高负载误报刷屏。
     /// </summary>
     /// <param name="reason">失败原因。</param>
     private void ReportHeartbeatProbeFailure(string reason)
     {
         var failureCount = Interlocked.Increment(ref _heartbeatProbeFailureCount);
+        if (IsSoftAlive())
+        {
+            Debug.WriteLine($"HTTP 心跳探测失败（软在线，不告警）第 {failureCount} 次：{reason}");
+            return;
+        }
+
         if (failureCount < ProbeWarningThreshold || failureCount % ProbeWarningThreshold != 0)
         {
             return;
