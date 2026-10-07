@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.Extensions.Options;
 using WpfDesktop.Models;
+using WpfDesktop.Models.Enums;
 using WpfDesktop.Services;
 using Xunit;
 
@@ -88,6 +89,56 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
         Assert.False(configuration.Launch.AutoLaunch);
     }
 
+    [Fact]
+    public async Task LoadConfigurationAsync_LegacyOptions_MigratesAndReportsChanges()
+    {
+        await WriteProfileJsonAsync("""
+            { "Id": "default", "Configuration": {
+                "Memory": { "VramMode": 3 },
+                "Device": { "DisableIpexOptimize": true, "CudaDevice": 1 },
+                "Miscellaneous": { "DisableApiNodes": true, "Verbose": 0, "FastOptions": ["autotune"] }
+            } }
+            """);
+        var logs = new List<LogEntry>();
+        var logger = new LogService();
+        logger.LogEntryReceived += (_, entry) => logs.Add(entry);
+        var service = new ConfigurationService(Options.Create(new AppSettings { DataRoot = _tempRoot }), logger);
+        var config = await service.LoadConfigurationAsync("default");
+        Assert.Equal(VramMode.Auto, config.Memory.VramMode);
+        Assert.False(config.Device.DisableIpexOptimize);
+        Assert.Equal(1, config.Device.CudaDevice);
+        Assert.False(config.Miscellaneous.DisableApiNodes);
+        Assert.True(config.Miscellaneous.Offline);
+        Assert.Equal(ComfyLogLevel.Debug, config.Miscellaneous.Verbose);
+        Assert.Equal(FastMode.Selected, config.Miscellaneous.FastMode);
+        foreach (var keyword in new[] { "NormalVram", "IPEX", "离线模式", "日志级别", "快速优化" })
+            Assert.Contains(logs, entry => entry.Level == GUILogLevel.Warning && entry.Message.Contains(keyword));
+        var arguments = new ArgumentBuilder().BuildArguments(config);
+        Assert.DoesNotContain("--normalvram", arguments);
+        Assert.DoesNotContain("--disable-ipex-optimize", arguments);
+        Assert.DoesNotContain("--disable-api-nodes", arguments);
+        await service.SaveConfigurationAsync("default", config);
+        var json = await File.ReadAllTextAsync(Path.Combine(_tempRoot, "profiles", "default.json"), Encoding.UTF8);
+        Assert.DoesNotContain("DisableIpexOptimize", json);
+        Assert.DoesNotContain("DisableApiNodes", json);
+        logs.Clear();
+        await service.LoadConfigurationAsync("default");
+        Assert.Empty(logs);
+    }
+
+    [Theory]
+    [InlineData(1, ComfyLogLevel.Debug)]
+    [InlineData(2, ComfyLogLevel.Information)]
+    [InlineData(3, ComfyLogLevel.Warning)]
+    [InlineData(4, ComfyLogLevel.Error)]
+    [InlineData(5, ComfyLogLevel.Critical)]
+    [InlineData(6, ComfyLogLevel.Information)]
+    public async Task LoadConfigurationAsync_LegacyLogNumbers_PreserveMeaning(int value, ComfyLogLevel expected)
+    {
+        await WriteProfileJsonAsync($"{{\"Id\":\"default\",\"Configuration\":{{\"Miscellaneous\":{{\"Verbose\":{value}}}}}}}");
+        Assert.Equal(expected, (await CreateService().LoadConfigurationAsync("default")).Miscellaneous.Verbose);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))
@@ -101,7 +152,7 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
         return new ConfigurationService(Options.Create(new AppSettings
         {
             DataRoot = _tempRoot
-        }));
+        }), new LogService());
     }
 
     private async Task WriteProfileJsonAsync(string json)

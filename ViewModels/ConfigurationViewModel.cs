@@ -5,7 +5,6 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Extensions.Logging;
 using WpfDesktop.Models;
 using WpfDesktop.Models.Enums;
 using WpfDesktop.Services;
@@ -79,7 +78,12 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
     private string _fastOptionsText = string.Empty;
 
     [ObservableProperty]
+    private string _featureFlagsText = string.Empty;
+
+    [ObservableProperty]
     private string _whitelistCustomNodesText = string.Empty;
+
+    public bool HasInputErrors { get; set; }
 
     public IAsyncRelayCommand LoadDefaultCommand { get; }
 
@@ -87,7 +91,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
     public IRelayCommand<string> BrowseDirectoryCommand { get; }
 
-    public IReadOnlyList<VramMode> VramModes { get; } = Enum.GetValues<VramMode>();
+    public IReadOnlyList<VramMode> VramModes { get; } = Enum.GetValues<VramMode>().Where(mode => mode != VramMode.NormalVram).ToArray();
 
     public IReadOnlyList<ForcePrecisionMode> ForcePrecisionModes { get; } = Enum.GetValues<ForcePrecisionMode>();
 
@@ -109,7 +113,22 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
     public IReadOnlyList<CudaMallocMode> CudaMallocModes { get; } = Enum.GetValues<CudaMallocMode>();
 
-    public IReadOnlyList<LogLevel> LogLevels { get; } = Enum.GetValues<LogLevel>();
+    public IReadOnlyList<ComfyLogLevel> LogLevels => ComfyConfigurationValidator.LogLevels;
+
+    public IReadOnlyList<FeatureMode> FeatureModes { get; } = Enum.GetValues<FeatureMode>();
+
+    public IReadOnlyList<FastMode> FastModes { get; } = Enum.GetValues<FastMode>();
+
+    public string FastOptionsHint => string.Join(" / ", ComfyConfigurationValidator.FastOptions);
+
+    [RelayCommand]
+    private void AddLogFile() => Configuration.Miscellaneous.LogFiles.Add(new LogFileConfiguration());
+
+    [RelayCommand]
+    private void RemoveLogFile(LogFileConfiguration? file)
+    {
+        if (file != null) Configuration.Miscellaneous.LogFiles.Remove(file);
+    }
 
     public IReadOnlyList<string> ListenAddressPresets { get; } =
     [
@@ -197,6 +216,17 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         IsLoading = true;
         try
         {
+            if (HasInputErrors)
+            {
+                _dialogService.ShowError("存在无法转换的输入值，请修正标红的字段后保存。", "配置无效");
+                return;
+            }
+            var errors = ComfyConfigurationValidator.Validate(Configuration);
+            if (errors.Count > 0)
+            {
+                _dialogService.ShowError(string.Join(Environment.NewLine, errors), "配置无效");
+                return;
+            }
             await _configurationService.SaveConfigurationAsync(_currentProfileId, Configuration);
             await SyncComfyManagerRemoteInstallSettingsAsync();
             WeakReferenceMessenger.Default.Send(new ComfyConfigurationChangedMessage(_currentProfileId));
@@ -221,6 +251,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         var initialDirectory = target switch
         {
             "Base" => Configuration.Paths.BaseDirectory,
+            "Models" => Configuration.Paths.ModelsDirectory,
             "ExtraModelBase" => Configuration.Paths.ExtraModelBaseDirectory,
             "Output" => Configuration.Paths.OutputDirectory,
             "Input" => Configuration.Paths.InputDirectory,
@@ -239,6 +270,9 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         {
             case "Base":
                 Configuration.Paths.BaseDirectory = selected;
+                break;
+            case "Models":
+                Configuration.Paths.ModelsDirectory = selected;
                 break;
             case "ExtraModelBase":
                 Configuration.Paths.ExtraModelBaseDirectory = selected;
@@ -295,6 +329,8 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
         TrackCollection(configuration.Paths.ExtraModelPathsConfig);
         TrackCollection(configuration.Miscellaneous.FastOptions);
+        TrackCollection(configuration.Miscellaneous.FeatureFlags);
+        TrackCollection(configuration.Miscellaneous.LogFiles);
         TrackCollection(configuration.Miscellaneous.WhitelistCustomNodes);
 
         SyncTextFromCollections();
@@ -355,6 +391,19 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         UpdateCollectionFromText(Configuration.Paths.ExtraModelPathsConfig, value);
     }
 
+    partial void OnFeatureFlagsTextChanged(string value)
+    {
+        if (_isSyncingText) return;
+        _isSyncingText = true;
+        try
+        {
+            Configuration.Miscellaneous.FeatureFlags.Clear();
+            foreach (var line in value.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                Configuration.Miscellaneous.FeatureFlags.Add(line);
+        }
+        finally { _isSyncingText = false; }
+    }
+
     partial void OnFastOptionsTextChanged(string value)
     {
         UpdateCollectionFromText(Configuration.Miscellaneous.FastOptions, value);
@@ -375,6 +424,7 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
         _isSyncingText = true;
         ExtraModelPathsText = string.Join(Environment.NewLine, Configuration.Paths.ExtraModelPathsConfig);
         FastOptionsText = string.Join(Environment.NewLine, Configuration.Miscellaneous.FastOptions);
+        FeatureFlagsText = string.Join(Environment.NewLine, Configuration.Miscellaneous.FeatureFlags);
         WhitelistCustomNodesText = string.Join(Environment.NewLine, Configuration.Miscellaneous.WhitelistCustomNodes);
         _isSyncingText = false;
     }
@@ -610,15 +660,15 @@ public partial class ConfigurationViewModel : ViewModelBase, INavigationAware
 
         var yamlFilePath = Path.Combine(_comfyPathService.ComfyUiPath, "extra_model_paths.yaml");
 
-        var yamlContent = ExtraModelPathsYamlHelper.GenerateYamlContent(extraBaseDir);
-
         try
         {
+            var yamlContent = ExtraModelPathsYamlHelper.GenerateYamlContent(extraBaseDir);
             await File.WriteAllTextAsync(yamlFilePath, yamlContent, System.Text.Encoding.UTF8);
         }
         catch (Exception ex)
         {
-            _dialogService.ShowError($"保存 extra_model_paths.yaml 失败：\n\n{ex.Message}", "保存失败");
+            _logService.LogError($"生成或保存 extra_model_paths.yaml 失败: {extraBaseDir} -> {yamlFilePath}", ex);
+            _dialogService.ShowError($"生成或保存 extra_model_paths.yaml 失败：\n\n{ex.Message}", "保存失败");
         }
     }
 

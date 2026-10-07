@@ -48,4 +48,18 @@ public sealed class GpuDisplaySelectionHelperTests
             new() { Name = "NVIDIA RTX 4090" }
         };
     }
+
+    [Theory]
+    [InlineData("0,2", "A,C")]
+    [InlineData("2,0", "C,A")]
+    [InlineData("all", "A,B,C")]
+    public void SelectVisibleGpus_MultiDeviceSelector_OverridesSingleDevice(string selector, string expected)
+    {
+        var gpus = new[] {
+            new GpuInfoSnapshot { Name = "NVIDIA A" }, new GpuInfoSnapshot { Name = "NVIDIA B" },
+            new GpuInfoSnapshot { Name = "NVIDIA C" }, new GpuInfoSnapshot { Name = "Intel" } };
+        var result = GpuDisplaySelectionHelper.SelectVisibleGpus(gpus, true, 1, selector);
+        Assert.Equal(expected, string.Join(",", result.Select(gpu => gpu.Name.Replace("NVIDIA ", ""))));
+        Assert.Equal(gpus, GpuDisplaySelectionHelper.SelectVisibleGpus(gpus, false, 1, selector));
+    }
 }

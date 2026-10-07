@@ -8,9 +8,9 @@ namespace WpfDesktop.Services;
 public static class ExtraModelPathsYamlHelper
 {
     /// <summary>
-    /// 根据基础目录生成 extra_model_paths.yaml 文件内容。
+    /// 扫描模型根目录的一级子目录，生成 extra_model_paths.yaml 文件内容。
     /// </summary>
-    /// <param name="basePath">模型基础目录。</param>
+    /// <param name="basePath">模型根目录。</param>
     /// <returns>符合 ComfyUI 格式的 YAML 文本。</returns>
     public static string GenerateYamlContent(string basePath)
     {
@@ -20,34 +20,9 @@ public static class ExtraModelPathsYamlHelper
             normalizedPath += '/';
         }
 
-        var hasModelsSubdir = Directory.Exists(Path.Combine(basePath, "models"));
-        var hasDirectModelDirs =
-            Directory.Exists(Path.Combine(basePath, "checkpoints")) ||
-            Directory.Exists(Path.Combine(basePath, "loras")) ||
-            Directory.Exists(Path.Combine(basePath, "vae")) ||
-            Directory.Exists(Path.Combine(basePath, "clip"));
-
-        var modelPrefix = hasDirectModelDirs && !hasModelsSubdir ? string.Empty : "models/";
-        var modelsRoot = modelPrefix.Length == 0 ? basePath : Path.Combine(basePath, "models");
-
-        var pathEntries = new List<(string Key, string RelativePath)>();
-        if (Directory.Exists(modelsRoot))
-        {
-            foreach (var dir in Directory.EnumerateDirectories(modelsRoot))
-            {
-                var dirName = Path.GetFileName(dir);
-                if (string.IsNullOrWhiteSpace(dirName))
-                {
-                    continue;
-                }
-
-                var relativePath = $"{modelPrefix}{dirName}/".Replace('\\', '/');
-                pathEntries.Add((dirName, relativePath));
-            }
-        }
-
-        pathEntries = pathEntries
-            .OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+        var directoryNames = Directory.EnumerateDirectories(basePath, "*", SearchOption.TopDirectoryOnly)
+            .Select(dir => Path.GetFileName(dir))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var yamlLines = new List<string>
@@ -59,9 +34,9 @@ public static class ExtraModelPathsYamlHelper
             $"    base_path: {normalizedPath}"
         };
 
-        foreach (var (key, relativePath) in pathEntries)
+        foreach (var name in directoryNames)
         {
-            yamlLines.Add($"    {key}: {relativePath}");
+            yamlLines.Add($"    {name}: {name}/");
         }
 
         yamlLines.Add(string.Empty);

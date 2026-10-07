@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Unicode;
 using Microsoft.Extensions.Options;
 using WpfDesktop.Models;
+using WpfDesktop.Models.Enums;
 using WpfDesktop.Services.Interfaces;
 
 namespace WpfDesktop.Services;
@@ -20,13 +21,15 @@ public class ConfigurationService : IConfigurationService
     };
 
     private readonly string _profilesDirectory;
+    private readonly ILogService _logService;
 
     /// <summary>
     /// 初始化配置服务并准备配置档案目录。
     /// </summary>
     /// <param name="settings">应用设置选项。</param>
-    public ConfigurationService(IOptions<AppSettings> settings)
+    public ConfigurationService(IOptions<AppSettings> settings, ILogService logService)
     {
+        _logService = logService;
         var dataRoot = PathHelper.ResolveDataRoot(settings.Value.DataRoot);
         _profilesDirectory = Path.Combine(dataRoot, "profiles");
         Directory.CreateDirectory(_profilesDirectory);
@@ -50,6 +53,7 @@ public class ConfigurationService : IConfigurationService
     /// <param name="configuration">待保存的配置对象。</param>
     public async Task SaveConfigurationAsync(string profileId, ComfyConfiguration configuration)
     {
+        ComfyConfigurationValidator.ThrowIfInvalid(configuration);
         var profile = await LoadProfileAsync(profileId) ?? new Profile { Id = profileId, Name = profileId };
         profile.Configuration = configuration;
         profile.LastModified = DateTime.Now;
@@ -68,24 +72,7 @@ public class ConfigurationService : IConfigurationService
     /// <returns>配置合法时返回 true，否则返回 false。</returns>
     public Task<bool> ValidateConfigurationAsync(ComfyConfiguration configuration)
     {
-        if (configuration.Network.Port is < 1 or > 65535)
-        {
-            return Task.FromResult(false);
-        }
-
-        if (!string.IsNullOrWhiteSpace(configuration.Network.TlsKeyFile)
-            && !File.Exists(configuration.Network.TlsKeyFile))
-        {
-            return Task.FromResult(false);
-        }
-
-        if (!string.IsNullOrWhiteSpace(configuration.Network.TlsCertFile)
-            && !File.Exists(configuration.Network.TlsCertFile))
-        {
-            return Task.FromResult(false);
-        }
-
-        return Task.FromResult(true);
+        return Task.FromResult(ComfyConfigurationValidator.Validate(configuration).Count == 0);
     }
 
     /// <summary>
@@ -102,7 +89,17 @@ public class ConfigurationService : IConfigurationService
         }
 
         await using var stream = File.OpenRead(filePath);
-        return await JsonSerializer.DeserializeAsync<Profile>(stream, _serializerOptions);
+        using var document = await JsonDocument.ParseAsync(stream);
+        var profile = document.RootElement.Deserialize<Profile>(_serializerOptions);
+        if (profile != null && document.RootElement.TryGetProperty("Configuration", out var config)
+            && config.TryGetProperty("Miscellaneous", out var misc)
+            && !misc.TryGetProperty("FastMode", out _)
+            && profile.Configuration.Miscellaneous.FastOptions.Count > 0)
+        {
+            profile.Configuration.Miscellaneous.FastMode = FastMode.Selected;
+            _logService.Log($"[配置迁移] {profileId}：旧快速优化列表已迁移为指定选项模式。", GUILogLevel.Warning);
+        }
+        return profile;
     }
 
     /// <summary>
@@ -131,8 +128,30 @@ public class ConfigurationService : IConfigurationService
     /// </summary>
     /// <param name="configuration">待规范化的配置对象。</param>
     /// <returns>规范化后的配置对象。</returns>
-    private static ComfyConfiguration NormalizeConfiguration(ComfyConfiguration configuration)
+    private ComfyConfiguration NormalizeConfiguration(ComfyConfiguration configuration)
     {
+        if (configuration.Memory.VramMode == VramMode.NormalVram)
+        {
+            configuration.Memory.VramMode = VramMode.Auto;
+            _logService.Log("[配置迁移] NormalVram 已被 ComfyUI 移除，已改为自动显存模式。", GUILogLevel.Warning);
+        }
+        if (configuration.Device.DisableIpexOptimize)
+        {
+            configuration.Device.DisableIpexOptimize = false;
+            _logService.Log("[配置迁移] ComfyUI 已移除 IPEX 优化开关，该设置已清除。", GUILogLevel.Warning);
+        }
+        if (configuration.Miscellaneous.DisableApiNodes)
+        {
+            configuration.Miscellaneous.DisableApiNodes = false;
+            configuration.Miscellaneous.Offline = true;
+            _logService.Log("[配置迁移] 禁用 API 节点已迁为离线模式，同时限制前端联网并禁用 Partner 节点。", GUILogLevel.Warning);
+        }
+        if (configuration.Miscellaneous.Verbose is ComfyLogLevel.LegacyTrace or ComfyLogLevel.LegacyNone)
+        {
+            configuration.Miscellaneous.Verbose = configuration.Miscellaneous.Verbose == ComfyLogLevel.LegacyTrace
+                ? ComfyLogLevel.Debug : ComfyLogLevel.Information;
+            _logService.Log("[配置迁移] 旧日志级别已转换为 ComfyUI 支持的级别。", GUILogLevel.Warning);
+        }
         var extraModelBaseDirectory = configuration.Paths.ExtraModelBaseDirectory;
         if (!string.IsNullOrWhiteSpace(extraModelBaseDirectory) && !Directory.Exists(extraModelBaseDirectory))
         {

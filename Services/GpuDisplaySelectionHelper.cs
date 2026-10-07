@@ -17,11 +17,21 @@ public static class GpuDisplaySelectionHelper
     public static IReadOnlyList<GpuInfoSnapshot> SelectVisibleGpus(
         IReadOnlyList<GpuInfoSnapshot> gpus,
         bool showSelectedOnly,
-        int? selectedCudaDevice)
+        int? selectedCudaDevice,
+        string? cudaDeviceSelector = null)
     {
         if (!showSelectedOnly)
         {
             return gpus.ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(cudaDeviceSelector))
+        {
+            if (cudaDeviceSelector.Trim() == "all") return gpus.Where(IsNvidiaGpu).ToArray();
+            if (!ComfyConfigurationValidator.TryParseCudaSelector(cudaDeviceSelector, out var ids))
+                throw new ArgumentException("CUDA 设备列表无效。", nameof(cudaDeviceSelector));
+            var nvidiaGpus = gpus.Where(IsNvidiaGpu).ToArray();
+            return ids.Where(id => id < nvidiaGpus.Length).Select(id => nvidiaGpus[id]).ToArray();
         }
 
         if (!selectedCudaDevice.HasValue || selectedCudaDevice.Value < 0)

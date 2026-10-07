@@ -582,7 +582,8 @@ public partial class MainViewModel : ViewModelBase
             var gpuSnapshots = GpuDisplaySelectionHelper.SelectVisibleGpus(
                 snapshot.Gpus,
                 settings.ShowSelectedGpuOnly,
-                _currentConfiguration?.Device?.CudaDevice);
+                _currentConfiguration?.Device?.CudaDevice,
+                _currentConfiguration?.Device?.CudaDeviceSelector);
             if (gpuSnapshots.Count == 0)
             {
                 GpuStatusItems.Clear();

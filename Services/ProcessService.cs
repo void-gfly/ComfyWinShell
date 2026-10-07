@@ -200,10 +200,19 @@ public class ProcessService : IProcessService, IDisposable
                 return false;
             }
 
+            string arguments;
+            try
+            {
+                arguments = _argumentBuilder.BuildArguments(configuration);
+            }
+            catch (ArgumentException ex)
+            {
+                _logService.LogError("ComfyUI 启动配置无效。", ex);
+                OutputReceived?.Invoke(this, $"无法启动：{ex.Message}");
+                return false;
+            }
             var appSettings = await _settingsService.LoadAsync();
             EnsureStartupDirectories(comfyRootPath, configuration);
-
-            var arguments = _argumentBuilder.BuildArguments(configuration);
             var startInfo = BuildStartInfo(comfyRootPath, arguments, appSettings.ExternalLaunchComfyUI);
             if (startInfo == null)
             {

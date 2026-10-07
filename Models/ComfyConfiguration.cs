@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.Extensions.Logging;
+using System.Text.Json.Serialization;
 using WpfDesktop.Models.Enums;
 
 namespace WpfDesktop.Models;
@@ -136,6 +136,9 @@ public partial class PathConfiguration : ObservableObject
     [ObservableProperty]
     private string? _baseDirectory;
 
+    [ObservableProperty]
+    private string? _modelsDirectory;
+
     /// <summary>
     /// 额外模型路径配置文件列表，用于传递给 ComfyUI。
     /// </summary>
@@ -184,6 +187,13 @@ public partial class DeviceConfiguration : ObservableObject
     [ObservableProperty]
     private int? _cudaDevice;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSingleCudaSelectionEnabled))]
+    private string? _cudaDeviceSelector;
+
+    [JsonIgnore]
+    public bool IsSingleCudaSelectionEnabled => string.IsNullOrWhiteSpace(CudaDeviceSelector);
+
     /// <summary>
     /// 默认计算设备编号或索引。
     /// </summary>
@@ -206,6 +216,7 @@ public partial class DeviceConfiguration : ObservableObject
     /// 是否禁用 IPEX 优化。
     /// </summary>
     [ObservableProperty]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     private bool _disableIpexOptimize;
 
     /// <summary>
@@ -261,6 +272,15 @@ public partial class MemoryConfiguration : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _smartMemory = true;
+
+    [ObservableProperty]
+    private double? _vramHeadroomGb;
+
+    [ObservableProperty]
+    private bool _disableNvmlPressure;
+
+    [ObservableProperty]
+    private FeatureMode _fastDiskMode;
 }
 
 /// <summary>
@@ -357,6 +377,9 @@ public partial class CacheConfiguration : ObservableObject
     /// </summary>
     [ObservableProperty]
     private double? _ramThresholdGb;
+
+    [ObservableProperty]
+    private double? _inactiveRamThresholdGb;
 }
 
 /// <summary>
@@ -430,6 +453,36 @@ public partial class MiscellaneousConfiguration : ObservableObject
     [ObservableProperty]
     private bool _enableAssets;
 
+    [ObservableProperty]
+    private bool _enableAssetHashing;
+
+    [ObservableProperty]
+    private bool _offline;
+
+    [ObservableProperty]
+    private bool _disablePartnerNodes;
+
+    [ObservableProperty]
+    private FeatureMode _tritonMode;
+
+    [ObservableProperty]
+    private bool _disableCudaGraphs;
+
+    [ObservableProperty]
+    private bool _disableComfyCompiler;
+
+    [ObservableProperty]
+    private bool _assertGraphBreaks;
+
+    [ObservableProperty]
+    private bool _debugHang;
+
+    [ObservableProperty]
+    private ObservableCollection<string> _featureFlags = new();
+
+    [ObservableProperty]
+    private ObservableCollection<LogFileConfiguration> _logFiles = new();
+
     /// <summary>
     /// 是否强制使用 channels_last 内存布局。
     /// </summary>
@@ -478,6 +531,9 @@ public partial class MiscellaneousConfiguration : ObservableObject
     [ObservableProperty]
     private ObservableCollection<string> _fastOptions = new();
 
+    [ObservableProperty]
+    private FastMode _fastMode;
+
     /// <summary>
     /// 是否禁用内存映射文件机制。
     /// </summary>
@@ -518,6 +574,7 @@ public partial class MiscellaneousConfiguration : ObservableObject
     /// 是否禁用 API 节点。
     /// </summary>
     [ObservableProperty]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     private bool _disableApiNodes;
 
     /// <summary>
@@ -530,7 +587,7 @@ public partial class MiscellaneousConfiguration : ObservableObject
     /// 日志详细级别。
     /// </summary>
     [ObservableProperty]
-    private LogLevel _verbose = LogLevel.Information;
+    private ComfyLogLevel _verbose = ComfyLogLevel.Information;
 
     /// <summary>
     /// 是否将标准输出内容记录到日志。

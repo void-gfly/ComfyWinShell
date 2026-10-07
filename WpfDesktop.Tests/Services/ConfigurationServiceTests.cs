@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using WpfDesktop.Models;
+using WpfDesktop.Models.Enums;
 using WpfDesktop.Services;
 using Xunit;
 
@@ -113,6 +114,50 @@ public sealed class ConfigurationServiceTests : IDisposable
         Assert.False(configuration.Network.AllowRemoteCustomNodeInstall);
     }
 
+    [Fact]
+    public async Task SaveAndLoadAsync_NewSettings_PreservesAllValuesAndExplicitOffMode()
+    {
+        var config = new ComfyConfiguration();
+        config.Paths.ModelsDirectory = _tempRoot;
+        config.Device.CudaDeviceSelector = "0,1";
+        config.Memory.VramHeadroomGb = 1.25;
+        config.Memory.FastDiskMode = FeatureMode.Disable;
+        config.Memory.DisableNvmlPressure = true;
+        config.Attention.Mode = AttentionMode.ComfyKitchen;
+        config.Cache.Mode = CacheMode.Ram;
+        config.Cache.RamThresholdGb = 3;
+        config.Cache.InactiveRamThresholdGb = 8;
+        config.Miscellaneous.Verbose = ComfyLogLevel.Detail;
+        config.Miscellaneous.TritonMode = FeatureMode.Enable;
+        config.Miscellaneous.Offline = true;
+        config.Miscellaneous.DisablePartnerNodes = true;
+        config.Miscellaneous.EnableAssetHashing = true;
+        config.Miscellaneous.DisableComfyCompiler = true;
+        config.Miscellaneous.DisableCudaGraphs = true;
+        config.Miscellaneous.AssertGraphBreaks = true;
+        config.Miscellaneous.DebugHang = true;
+        config.Miscellaneous.FeatureFlags.Add("labels=a,b");
+        config.Miscellaneous.LogFiles.Add(new LogFileConfiguration { Level = ComfyLogLevel.Warning, Path = "日志 文件.log" });
+        config.Miscellaneous.FastOptions.Add("autotune");
+        config.Miscellaneous.FastMode = FastMode.Off;
+        var service = CreateService();
+        await service.SaveConfigurationAsync("default", config);
+        var loaded = await service.LoadConfigurationAsync("default");
+        Assert.Equal(JsonSerializer.Serialize(config), JsonSerializer.Serialize(loaded));
+        Assert.DoesNotContain("--fast ", new ArgumentBuilder().BuildArguments(loaded));
+    }
+
+    [Fact]
+    public async Task SaveConfigurationAsync_InvalidSettings_DoNotWriteProfile()
+    {
+        var config = new ComfyConfiguration();
+        config.Device.CudaDeviceSelector = "0,,1";
+        var service = CreateService();
+        Assert.False(await service.ValidateConfigurationAsync(config));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SaveConfigurationAsync("default", config));
+        Assert.False(File.Exists(Path.Combine(_tempRoot, "profiles", "default.json")));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))
@@ -126,7 +171,7 @@ public sealed class ConfigurationServiceTests : IDisposable
         return new ConfigurationService(Options.Create(new AppSettings
         {
             DataRoot = _tempRoot
-        }));
+        }), new LogService());
     }
 
     private async Task WriteProfileAsync(Profile profile)

@@ -157,6 +157,51 @@ public sealed class ConfigurationViewModelTests
             entry.Message.Contains("CUDA 设备枚举未返回已保存设备", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task NewCollections_LoadEditAndReload_StaySynchronized()
+    {
+        var config = new ComfyConfiguration();
+        config.Miscellaneous.FeatureFlags.Add("labels=a,b");
+        var service = new FakeConfigurationService(config);
+        var vm = new ConfigurationViewModel(service, new FakeComfyPathService(), new FakeProfileService(),
+            new FakeHardwareMonitorService(), new FakeComfyManagerSettingsService(), new ArgumentBuilder(),
+            new FakeDialogService(), new FakeLogService());
+        service.CompleteLoad();
+        await vm.OnNavigatedToAsync();
+        Assert.Equal("labels=a,b", vm.FeatureFlagsText);
+        vm.FeatureFlagsText = "labels=c,d\nshow_signin_button=false";
+        Assert.Equal(new[] { "labels=c,d", "show_signin_button=false" }, config.Miscellaneous.FeatureFlags);
+        config.Miscellaneous.FeatureFlags.Add("new_flag");
+        Assert.Contains("new_flag", vm.FeatureFlagsText);
+        vm.AddLogFileCommand.Execute(null);
+        Assert.Single(config.Miscellaneous.LogFiles);
+        var file = config.Miscellaneous.LogFiles[0];
+        file.Path = "日志 文件.log";
+        await vm.SaveDefaultCommand.ExecuteAsync(null);
+        Assert.Equal(1, service.SaveCalls);
+        vm.RemoveLogFileCommand.Execute(file);
+        Assert.Empty(config.Miscellaneous.LogFiles);
+        await vm.OnNavigatedToAsync();
+        Assert.Equal(string.Join(Environment.NewLine, config.Miscellaneous.FeatureFlags), vm.FeatureFlagsText);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveDefaultAsync_InvalidInputs_AreNotPersisted(bool bindingError)
+    {
+        var config = new ComfyConfiguration();
+        var service = new FakeConfigurationService(config);
+        var dialog = new FakeDialogService();
+        var vm = new ConfigurationViewModel(service, new FakeComfyPathService(), new FakeProfileService(),
+            new FakeHardwareMonitorService(), new FakeComfyManagerSettingsService(), new ArgumentBuilder(), dialog, new FakeLogService());
+        vm.HasInputErrors = bindingError;
+        if (!bindingError) vm.Configuration.Device.CudaDeviceSelector = "0,,1";
+        await vm.SaveDefaultCommand.ExecuteAsync(null);
+        Assert.Equal(0, service.SaveCalls);
+        Assert.Single(dialog.Errors);
+    }
+
     private sealed class FakeConfigurationService : IConfigurationService
     {
         private readonly ComfyConfiguration _configuration;
@@ -168,6 +213,7 @@ public sealed class ConfigurationViewModelTests
         }
 
         public int LoadCalls { get; private set; }
+        public int SaveCalls { get; private set; }
 
         public Task<ComfyConfiguration> LoadConfigurationAsync(string profileId)
         {
@@ -177,6 +223,7 @@ public sealed class ConfigurationViewModelTests
 
         public Task SaveConfigurationAsync(string profileId, ComfyConfiguration configuration)
         {
+            SaveCalls++;
             return Task.CompletedTask;
         }
 
@@ -275,7 +322,8 @@ public sealed class ConfigurationViewModelTests
         public string? SaveFile(string title, string? defaultFileName = null, string? filter = null, string? initialDirectory = null) => null;
         public bool Confirm(string message, string title = "确认") => false;
         public void ShowInfo(string message, string title = "信息") { }
-        public void ShowError(string message, string title = "错误") { }
+        public List<string> Errors { get; } = new();
+        public void ShowError(string message, string title = "错误") => Errors.Add(message);
     }
 
     private sealed class FakeLogService : ILogService

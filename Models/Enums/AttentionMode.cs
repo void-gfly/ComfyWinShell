@@ -10,5 +10,6 @@ public enum AttentionMode
     QuadCross,
     Pytorch,
     Sage,
-    Flash
+    Flash,
+    ComfyKitchen
 }

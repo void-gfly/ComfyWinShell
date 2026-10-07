@@ -1,5 +1,5 @@
 using System.Globalization;
-using Microsoft.Extensions.Logging;
+using System.Text;
 using WpfDesktop.Models;
 using WpfDesktop.Models.Enums;
 
@@ -17,6 +17,7 @@ public class ArgumentBuilder
     /// <returns>拼接后的命令行参数字符串。</returns>
     public string BuildArguments(ComfyConfiguration configuration)
     {
+        ComfyConfigurationValidator.ThrowIfInvalid(configuration);
         var args = new List<string>();
 
         AddNetworkArguments(args, configuration.Network);
@@ -43,7 +44,7 @@ public class ArgumentBuilder
     {
         if (!string.IsNullOrWhiteSpace(network.Listen) && network.Listen != "127.0.0.1")
         {
-            args.Add($"--listen {network.Listen}");
+            args.Add($"--listen {Quote(network.Listen)}");
         }
 
         if (network.Port != 8188)
@@ -74,7 +75,7 @@ public class ArgumentBuilder
             }
             else
             {
-                args.Add($"--enable-cors-header {network.CorsOrigin}");
+                args.Add($"--enable-cors-header {Quote(network.CorsOrigin)}");
             }
         }
     }
@@ -90,6 +91,9 @@ public class ArgumentBuilder
         {
             args.Add($"--base-directory {Quote(paths.BaseDirectory)}");
         }
+
+        if (!string.IsNullOrWhiteSpace(paths.ModelsDirectory))
+            args.Add($"--models-directory {Quote(paths.ModelsDirectory)}");
 
         if (paths.ExtraModelPathsConfig.Count > 0)
         {
@@ -130,7 +134,12 @@ public class ArgumentBuilder
     /// <param name="device">设备配置。</param>
     private static void AddDeviceArguments(List<string> args, DeviceConfiguration device)
     {
-        if (device.CudaDevice.HasValue)
+        if (!string.IsNullOrWhiteSpace(device.CudaDeviceSelector))
+        {
+            ComfyConfigurationValidator.TryParseCudaSelector(device.CudaDeviceSelector, out var ids);
+            args.Add($"--cuda-device {(ids.Length == 0 ? "all" : string.Join(",", ids))}");
+        }
+        else if (device.CudaDevice.HasValue)
         {
             args.Add($"--cuda-device {device.CudaDevice.Value}");
         }
@@ -147,12 +156,7 @@ public class ArgumentBuilder
 
         if (!string.IsNullOrWhiteSpace(device.OneApiDeviceSelector))
         {
-            args.Add($"--oneapi-device-selector {device.OneApiDeviceSelector}");
-        }
-
-        if (device.DisableIpexOptimize)
-        {
-            args.Add("--disable-ipex-optimize");
+            args.Add($"--oneapi-device-selector {Quote(device.OneApiDeviceSelector)}");
         }
 
         if (device.CpuVae)
@@ -174,7 +178,6 @@ public class ArgumentBuilder
             {
                 VramMode.GpuOnly => "--gpu-only",
                 VramMode.HighVram => "--highvram",
-                VramMode.NormalVram => "--normalvram",
                 VramMode.LowVram => "--lowvram",
                 VramMode.NoVram => "--novram",
                 VramMode.Cpu => "--cpu",
@@ -187,7 +190,7 @@ public class ArgumentBuilder
             args.Add($"--reserve-vram {memory.ReserveVramGb.Value.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (memory.AsyncOffloadStreams.HasValue)
+        if (!memory.DisableAsyncOffload && memory.AsyncOffloadStreams.HasValue)
         {
             args.Add($"--async-offload {memory.AsyncOffloadStreams.Value}");
         }
@@ -209,6 +212,11 @@ public class ArgumentBuilder
         {
             args.Add("--disable-dynamic-vram");
         }
+
+        if (memory.VramHeadroomGb.HasValue)
+            args.Add($"--vram-headroom {memory.VramHeadroomGb.Value.ToString(CultureInfo.InvariantCulture)}");
+        if (memory.DisableNvmlPressure) args.Add("--disable-nvml-pressure");
+        AddFeatureMode(args, memory.FastDiskMode, "--fast-disk", "--disable-fast-disk");
 
         if (!memory.SmartMemory)
         {
@@ -289,6 +297,7 @@ public class ArgumentBuilder
                 AttentionMode.Pytorch => "--use-pytorch-cross-attention",
                 AttentionMode.Sage => "--use-sage-attention",
                 AttentionMode.Flash => "--use-flash-attention",
+                AttentionMode.ComfyKitchen => "--use-ck-attention",
                 _ => string.Empty
             });
         }
@@ -346,12 +355,17 @@ public class ArgumentBuilder
                 args.Add("--cache-classic");
                 break;
             case CacheMode.Lru:
-                args.Add(cache.LruCount > 0 ? $"--cache-lru {cache.LruCount}" : "--cache-lru");
+                args.Add($"--cache-lru {cache.LruCount}");
                 break;
             case CacheMode.Ram:
                 args.Add(cache.RamThresholdGb.HasValue
                     ? $"--cache-ram {cache.RamThresholdGb.Value.ToString(CultureInfo.InvariantCulture)}"
                     : "--cache-ram");
+                if (cache.InactiveRamThresholdGb.HasValue)
+                    args[^1] += $" {cache.InactiveRamThresholdGb.Value.ToString(CultureInfo.InvariantCulture)}";
+                break;
+            case CacheMode.HighRam:
+                args.Add("--high-ram");
                 break;
             case CacheMode.None:
                 args.Add("--cache-none");
@@ -405,7 +419,7 @@ public class ArgumentBuilder
 
         if (!string.IsNullOrWhiteSpace(launch.FrontEndVersion))
         {
-            args.Add($"--front-end-version {launch.FrontEndVersion}");
+            args.Add($"--front-end-version {Quote(launch.FrontEndVersion)}");
         }
 
         if (!string.IsNullOrWhiteSpace(launch.FrontEndRoot))
@@ -465,7 +479,8 @@ public class ArgumentBuilder
             args.Add("--deterministic");
         }
 
-        if (misc.FastOptions.Count > 0)
+        if (misc.FastMode == FastMode.All) args.Add("--fast");
+        else if (misc.FastMode == FastMode.Selected)
         {
             args.Add($"--fast {string.Join(" ", misc.FastOptions)}");
         }
@@ -497,20 +512,26 @@ public class ArgumentBuilder
 
         if (misc.WhitelistCustomNodes.Count > 0)
         {
-            args.Add($"--whitelist-custom-nodes {string.Join(" ", misc.WhitelistCustomNodes)}");
+            args.Add($"--whitelist-custom-nodes {string.Join(" ", misc.WhitelistCustomNodes.Select(Quote))}");
         }
 
-        if (misc.DisableApiNodes)
-        {
-            args.Add("--disable-api-nodes");
-        }
+        if (misc.Offline) args.Add("--offline");
+        if (misc.DisablePartnerNodes) args.Add("--disable-partner-nodes");
+        if (misc.EnableAssetHashing) args.Add("--enable-asset-hashing");
+        if (misc.DisableCudaGraphs) args.Add("--disable-cuda-graphs");
+        if (misc.DisableComfyCompiler) args.Add("--disable-comfy-compiler");
+        if (misc.AssertGraphBreaks) args.Add("--assert-graph-breaks");
+        if (misc.DebugHang) args.Add("--debug-hang");
+        AddFeatureMode(args, misc.TritonMode, "--enable-triton-backend", "--disable-triton-backend");
+        foreach (var flag in misc.FeatureFlags) args.Add($"--feature-flag {Quote(flag)}");
+        foreach (var file in misc.LogFiles) args.Add($"--verbose {ToVerboseValue(file.Level)} {Quote(file.Path)}");
 
         if (misc.MultiUser)
         {
             args.Add("--multi-user");
         }
 
-        if (misc.Verbose != LogLevel.Information)
+        if (misc.Verbose != ComfyLogLevel.Information)
         {
             args.Add($"--verbose {ToVerboseValue(misc.Verbose)}");
         }
@@ -527,12 +548,12 @@ public class ArgumentBuilder
 
         if (!string.IsNullOrWhiteSpace(misc.ComfyApiBase))
         {
-            args.Add($"--comfy-api-base {misc.ComfyApiBase}");
+            args.Add($"--comfy-api-base {Quote(misc.ComfyApiBase)}");
         }
 
         if (!string.IsNullOrWhiteSpace(misc.DatabaseUrl))
         {
-            args.Add($"--database-url {misc.DatabaseUrl}");
+            args.Add($"--database-url {Quote(misc.DatabaseUrl)}");
         }
 
     }
@@ -542,26 +563,40 @@ public class ArgumentBuilder
     /// </summary>
     /// <param name="level">日志级别。</param>
     /// <returns>对应的命令行字符串值。</returns>
-    private static string ToVerboseValue(LogLevel level)
+    private static string ToVerboseValue(ComfyLogLevel level)
     {
         return level switch
         {
-            LogLevel.Debug => "DEBUG",
-            LogLevel.Warning => "WARNING",
-            LogLevel.Error => "ERROR",
-            LogLevel.Critical => "CRITICAL",
-            LogLevel.Trace => "DEBUG",
-            _ => "INFO"
+            ComfyLogLevel.Debug => "DEBUG",
+            ComfyLogLevel.Warning => "WARNING",
+            ComfyLogLevel.Error => "ERROR",
+            ComfyLogLevel.Critical => "CRITICAL",
+            ComfyLogLevel.Detail => "DETAIL",
+            ComfyLogLevel.Information => "INFO",
+            _ => throw new ArgumentOutOfRangeException(nameof(level))
         };
     }
 
-    /// <summary>
-    /// 在路径包含空格时为其添加引号。
-    /// </summary>
-    /// <param name="value">原始参数值。</param>
-    /// <returns>适合命令行使用的参数值。</returns>
+    private static void AddFeatureMode(List<string> args, FeatureMode mode, string enable, string disable)
+    {
+        if (mode == FeatureMode.Enable) args.Add(enable);
+        else if (mode == FeatureMode.Disable) args.Add(disable);
+    }
+
+    // 按 Windows argv 规则转义引号及其前面的反斜杠，保留带空格目录末尾的反斜杠。
     private static string Quote(string value)
     {
-        return value.Contains(' ') ? $"\"{value}\"" : value;
+        if (value.Length > 0 && !value.Any(c => char.IsWhiteSpace(c) || c == '"')) return value;
+        var result = new StringBuilder("\"");
+        var slashes = 0;
+        foreach (var c in value)
+        {
+            if (c == '\\') { slashes++; continue; }
+            result.Append('\\', c == '"' ? slashes * 2 + 1 : slashes);
+            result.Append(c);
+            slashes = 0;
+        }
+        result.Append('\\', slashes * 2);
+        return result.Append('"').ToString();
     }
 }

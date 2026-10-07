@@ -38,6 +38,26 @@ public sealed class ProcessServiceTests
     }
 
     [Fact]
+    public async Task StartAsync_InvalidConfiguration_FailsBeforeResolvingPythonOrCreatingDirectories()
+    {
+        using var root = new TempComfyRoot();
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var log = new RecordingLogService();
+        using var service = new ProcessService(new ArgumentBuilder(), new BlockingPythonPathService(entered, release),
+            new FakeProxyService(), log, new FakeSettingsService(), new ResiliencePolicyService(log));
+        var config = new ComfyConfiguration();
+        config.Device.CudaDeviceSelector = "invalid";
+        var output = new List<string>();
+        service.OutputReceived += (_, message) => output.Add(message);
+        Assert.False(await service.StartAsync(root.RootPath, config));
+        Assert.False(entered.IsSet);
+        Assert.False(Directory.Exists(Path.Combine(root.RootPath, "input")));
+        Assert.Contains(output, message => message.Contains("CUDA 设备"));
+        Assert.Contains(log.Entries, entry => entry.Level == GUILogLevel.Error);
+    }
+
+    [Fact]
     public async Task StartAsync_ReturnsTaskBeforePythonResolutionCompletes()
     {
         using var tempRoot = new TempComfyRoot();

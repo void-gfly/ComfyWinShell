@@ -9,5 +9,6 @@ public enum CacheMode
     Classic,
     Lru,
     Ram,
-    None
+    None,
+    HighRam
 }

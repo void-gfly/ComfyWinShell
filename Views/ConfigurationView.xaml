@@ -158,26 +158,26 @@
                                 <StackPanel Margin="0,0,20,10" ToolTip="指定监听的 IP 地址。默认为 127.0.0.1（仅本机）。官方当前推荐的全接口值为 0.0.0.0,::；如果命令行仅写 --listen 不带参数，也会默认使用该值。(--listen)">
                                     <TextBlock Text="监听地址 (Listen)" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding ListenAddressPresets}"
-                                              Text="{Binding Configuration.Network.Listen, UpdateSourceTrigger=PropertyChanged}"
+                                              Text="{Binding Configuration.Network.Listen, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
                                               IsEditable="True"
                                               IsTextSearchEnabled="False"
                                               Width="200"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="设置监听端口。默认为 8188。(--port)">
                                     <TextBlock Text="端口 (Port)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Network.Port, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Network.Port, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="120"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="添加 Access-Control-Allow-Origin 头到响应中。留空表示不启用，* 表示允许任意来源，也可填写具体来源。(--enable-cors-header)">
                                     <TextBlock Text="CORS 来源" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding CorsOriginPresets}"
-                                              Text="{Binding Configuration.Network.CorsOrigin, UpdateSourceTrigger=PropertyChanged}"
+                                              Text="{Binding Configuration.Network.CorsOrigin, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
                                               IsEditable="True"
                                               IsTextSearchEnabled="False"
                                               Width="220"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,0,10" ToolTip="设置最大上传文件大小(MB)。默认为 100MB。(--max-upload-size)">
                                     <TextBlock Text="最大上传 (MB)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Network.MaxUploadSizeMb, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Network.MaxUploadSizeMb, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="120"/>
                                 </StackPanel>
                             </WrapPanel>
                             <Grid Margin="0,10,0,0">
@@ -187,11 +187,11 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,10,0" ToolTip="TLS 密钥文件路径。用于启用 HTTPS。(--tls-keyfile)">
                                     <TextBlock Text="TLS 密钥 (Key)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Network.TlsKeyFile, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Network.TlsKeyFile, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" ToolTip="TLS 证书文件路径。用于启用 HTTPS。(--tls-certfile)">
                                     <TextBlock Text="TLS 证书 (Cert)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Network.TlsCertFile, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Network.TlsCertFile, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </StackPanel>
                             </Grid>
                             <CheckBox Content="允许远程安装自定义节点"
@@ -210,27 +210,34 @@
                                 <TextBlock Text="基础目录 (Base)" Style="{StaticResource FieldLabel}"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="Base" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding Configuration.Paths.BaseDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Paths.BaseDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </DockPanel>
                             </StackPanel>
 
-                            <StackPanel Margin="0,0,0,10" ToolTip="扩展模型基础目录。指定后会自动生成 extra_model_paths.yaml，使用标准的 models/ 子目录结构（checkpoints、loras、vae 等）。适用于与其他 ComfyUI 实例或 WebUI 共享模型。">
+                            <StackPanel Margin="0,0,0,10" ToolTip="选择模型根目录，例如 S:\models。保存配置或启动应用时会扫描该目录的一级子目录，按实际目录名生成 extra_model_paths.yaml。重启 ComfyUI 后生效。">
                                 <TextBlock Text="扩展模型目录 (Extra Models Base)" Style="{StaticResource FieldLabel}"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="ExtraModelBase" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding Configuration.Paths.ExtraModelBaseDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Paths.ExtraModelBaseDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </DockPanel>
-                                <TextBlock Text="💡 该目录下应包含 models/checkpoints、models/loras 等标准子目录" 
+                                <TextBlock Text="💡 请选择模型根目录（例如 S:\models），自动扫描其一级子目录，支持自定义分类名称"
                                            Foreground="#888888" 
                                            FontSize="11" 
                                            Margin="0,4,0,0"/>
                             </StackPanel>
 
+                            <StackPanel Margin="0,0,0,10" ToolTip="指定主模型目录，覆盖基础目录下的 models 文件夹；与额外模型路径独立。(--models-directory)">
+                                <TextBlock Text="模型目录" Style="{StaticResource FieldLabel}"/>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="Models" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
+                                    <TextBox Text="{Binding Configuration.Paths.ModelsDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
+                                    </DockPanel>
+                            </StackPanel>
                             <StackPanel Margin="0,0,0,10" ToolTip="设置输出目录，用于保存生成的图像。(--output-directory)">
                                 <TextBlock Text="输出目录 (Output)" Style="{StaticResource FieldLabel}"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="Output" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding Configuration.Paths.OutputDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Paths.OutputDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </DockPanel>
                             </StackPanel>
 
@@ -238,7 +245,7 @@
                                 <TextBlock Text="输入目录 (Input)" Style="{StaticResource FieldLabel}"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="Input" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding Configuration.Paths.InputDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Paths.InputDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </DockPanel>
                             </StackPanel>
 
@@ -246,7 +253,7 @@
                                 <TextBlock Text="临时目录 (Temp)" Style="{StaticResource FieldLabel}"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="Temp" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding Configuration.Paths.TempDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Paths.TempDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </DockPanel>
                             </StackPanel>
 
@@ -254,13 +261,13 @@
                                 <TextBlock Text="用户目录 (User)" Style="{StaticResource FieldLabel}"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="浏览" Command="{Binding BrowseDirectoryCommand}" CommandParameter="User" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding Configuration.Paths.UserDirectory, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Paths.UserDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </DockPanel>
                             </StackPanel>
 
                             <StackPanel ToolTip="加载额外的模型路径配置文件 (extra_model_paths.yaml)。每行一个路径。(--extra-model-paths-config)">
                                 <TextBlock Text="额外配置文件路径 (Advanced)" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding ExtraModelPathsText, UpdateSourceTrigger=PropertyChanged}"
+                                <TextBox Text="{Binding ExtraModelPathsText, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
                                          AcceptsReturn="True" Height="80" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
                             </StackPanel>
                         </StackPanel>
@@ -275,25 +282,28 @@
                                 <StackPanel Margin="0,0,20,10" ToolTip="设置使用的 CUDA 设备 ID。(--cuda-device)">
                                     <TextBlock Text="CUDA 设备" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding CudaDevices}"
-                                              SelectedItem="{Binding SelectedCudaDevice}"
+                                              SelectedItem="{Binding SelectedCudaDevice}" IsEnabled="{Binding Configuration.Device.IsSingleCudaSelectionEnabled}"
                                               DisplayMemberPath="DisplayName"
                                               Width="280"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="配置使用的默认设备 ID。此设置可能影响非 CUDA 设备。">
                                     <TextBlock Text="默认设备 ID" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Device.DefaultDevice, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Device.DefaultDevice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="120"/>
                                 </StackPanel>
-                                <StackPanel Margin="0,0,20,10" ToolTip="指定 DirectML 设备 ID。用于 AMD/Intel 显卡。(--directml)">
+                                <StackPanel Margin="0,0,20,10" ToolTip="留空使用单卡选择；支持 0,1 或 all，仅控制当前进程可见设备，不代表自动并行计算。(--cuda-device)">
+                                    <TextBlock Text="CUDA 多设备（覆盖单卡选择）" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding Configuration.Device.CudaDeviceSelector, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="240"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,20,10" ToolTip="指定 DirectML 设备 ID，-1 使用默认设备，需要 torch-directml。(--directml)">
                                     <TextBlock Text="DirectML 设备" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Device.DirectMlDevice, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Device.DirectMlDevice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="120"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,0,10" ToolTip="OneAPI 设备选择字符串。例如 'level_zero:0'。">
                                     <TextBlock Text="OneAPI 选择器" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Device.OneApiDeviceSelector, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                                    <TextBox Text="{Binding Configuration.Device.OneApiDeviceSelector, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="200"/>
                                 </StackPanel>
                             </WrapPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <CheckBox Content="禁用 IPEX 优化" IsChecked="{Binding Configuration.Device.DisableIpexOptimize}" Margin="0,0,20,0" ToolTip="禁用 Intel PyTorch Extension (IPEX) 优化。用于 Intel GPU。"/>
                                 <CheckBox Content="CPU VAE" IsChecked="{Binding Configuration.Device.CpuVae}" ToolTip="在 CPU 上运行 VAE 解码/编码。可以节省显存，但速度较慢。(--cpu-vae)"/>
                             </StackPanel>
                         </StackPanel>
@@ -305,17 +315,17 @@
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <WrapPanel>
-                                <StackPanel Margin="0,0,20,10" ToolTip="设置显存管理模式：high (全部加载到显存), low (低显存模式), normal (平衡模式)。(--lowvram, --highvram, --normalvram)">
+                                <StackPanel Margin="0,0,20,10" ToolTip="自动模式使用官方默认；LowVram 在动态显存启用时不生效，关闭动态显存后使文本编码器在 CPU 上运行。(--lowvram, --highvram, --gpu-only, --novram, --cpu)">
                                     <TextBlock Text="显存模式 (VRAM)" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding VramModes}" SelectedItem="{Binding Configuration.Memory.VramMode}" Width="200"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="强制保留指定的显存量(GB)，不用于 ComfyUI。(--reserve-vram)">
                                     <TextBlock Text="保留显存 (GB)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Memory.ReserveVramGb, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Memory.ReserveVramGb, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="120"/>
                                 </StackPanel>
-                                <StackPanel Margin="0,0,0,10" ToolTip="设置异步卸载流的数量。">
+                                <StackPanel Margin="0,0,0,10" ToolTip="可选流数量，不填写时 --async-offload 默认使用 2；NVIDIA 默认启用。勾选禁用异步卸载后不输出流参数。">
                                     <TextBlock Text="异步流数量" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Memory.AsyncOffloadStreams, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Memory.AsyncOffloadStreams, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="120"/>
                                 </StackPanel>
                             </WrapPanel>
                             <WrapPanel Margin="0,10,0,0">
@@ -329,6 +339,17 @@
                                 <CheckBox Content="禁用异步卸载" IsChecked="{Binding Configuration.Memory.DisableAsyncOffload}" Margin="0,0,20,0" ToolTip="显式禁用异步卸载。(--disable-async-offload)"/>
                                 <CheckBox Content="智能内存 (Smart Memory)" IsChecked="{Binding Configuration.Memory.SmartMemory}" ToolTip="启用智能内存管理 (此选项可能会被 ComfyUI 默认启用)。(--disable-smart-memory to disable)"/>
                             </StackPanel>
+                            <WrapPanel Margin="0,10,0,0">
+                                <StackPanel Margin="0,0,20,10" ToolTip="动态显存管理额外保留的空闲显存，包括其他应用占用。(--vram-headroom)">
+                                    <TextBlock Text="动态显存额外余量 (GB)" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding Configuration.Memory.VramHeadroomGb, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="180"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,20,10" ToolTip="Default 保持官方行为；Enable 使用磁盘支持的动态加载；Disable 显式禁用。(--fast-disk / --disable-fast-disk)">
+                                    <TextBlock Text="快速磁盘加载" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox ItemsSource="{Binding FeatureModes}" SelectedItem="{Binding Configuration.Memory.FastDiskMode}" Width="180"/>
+                                </StackPanel>
+                                <CheckBox Content="禁用 NVML 压力检测" IsChecked="{Binding Configuration.Memory.DisableNvmlPressure}" Margin="0,0,20,8" ToolTip="改用 CUDA 检测动态显存压力。(--disable-nvml-pressure)"/>
+                            </WrapPanel>
                         </StackPanel>
                     </Border>
                 </Expander>
@@ -350,7 +371,7 @@
                                     <TextBlock Text="VAE 精度" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding VaePrecisionModes}" SelectedItem="{Binding Configuration.Precision.VaePrecision}" Width="180"/>
                                 </StackPanel>
-                                <StackPanel Margin="0,0,0,10" ToolTip="设置 TextEncoder (CLIP) 的计算精度。(--fp16-te, --fp32-te)">
+                                <StackPanel Margin="0,0,0,10" ToolTip="设置 TextEncoder (CLIP) 的计算精度。(--fp16-text-enc, --fp32-text-enc, --bf16-text-enc)">
                                     <TextBlock Text="TextEncoder 精度" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding TextEncoderPrecisionModes}" SelectedItem="{Binding Configuration.Precision.TextEncoderPrecision}" Width="180"/>
                                 </StackPanel>
@@ -370,7 +391,7 @@
                     <Expander Grid.Column="0" Header="注意力机制 (Attention)" Style="{StaticResource SectionExpander}">
                         <Border Style="{StaticResource CardBorder}">
                             <StackPanel>
-                                <StackPanel Margin="0,0,0,10" ToolTip="选择 Cross-Attention 的实现方式。Split (Apple), Quad (Nvidia Old), Pytorch (Newer)。(--use-split-cross-attention, etc)">
+                                <StackPanel Margin="0,0,0,10" ToolTip="选择注意力实现；ComfyKitchen 使用 --use-ck-attention。Split/Quad 在使用 xFormers 时被忽略。Sage/Flash 需要相应依赖。">
                                     <TextBlock Text="模式" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding AttentionModes}" SelectedItem="{Binding Configuration.Attention.Mode}"/>
                                 </StackPanel>
@@ -392,7 +413,7 @@
                                 </StackPanel>
                                 <StackPanel ToolTip="限制预览图像的尺寸。默认为 512。">
                                     <TextBlock Text="预览尺寸" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Preview.PreviewSize, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Preview.PreviewSize, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="120"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -410,17 +431,21 @@
                     <Expander Grid.Column="0" Header="缓存设置 (Cache)" Style="{StaticResource SectionExpander}">
                         <Border Style="{StaticResource CardBorder}">
                             <StackPanel>
-                                <StackPanel Margin="0,0,0,10" ToolTip="暂时只有 LRU 缓存模式可选。">
+                                <StackPanel Margin="0,0,0,10" ToolTip="Default 使用官方 RAM 压力缓存默认值；Classic、LRU、RAM、None、HighRam 互斥。">
                                     <TextBlock Text="模式" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding CacheModes}" SelectedItem="{Binding Configuration.Cache.Mode}"/>
                                 </StackPanel>
-                                <StackPanel Margin="0,0,0,10" ToolTip="设置缓存中保留的模型数量。">
+                                <StackPanel Margin="0,0,0,10" ToolTip="最多保留的节点执行结果数量；0 保持官方默认缓存行为。(--cache-lru N)">
                                     <TextBlock Text="LRU 数量" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Cache.LruCount, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                    <TextBox Text="{Binding Configuration.Cache.LruCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="120"/>
                                 </StackPanel>
-                                <StackPanel ToolTip="设置 RAM 阈值(GB)。不知道具体用途，可能是用于清理缓存的阈值。">
-                                    <TextBlock Text="RAM 阈值 (GB)" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Cache.RamThresholdGb, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="120"/>
+                                <StackPanel ToolTip="RAM 压力缓存的空闲内存阈值。活动默认总 RAM 的 10%（2–10GB）；非活动默认总 RAM（上限 128GB）。(--cache-ram ACTIVE [INACTIVE])">
+                                    <TextBlock Text="活动缓存阈值 (GB)" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding Configuration.Cache.RamThresholdGb, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="120"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,10,0,0" ToolTip="可选第二阈值；填写时必须同时填写活动阈值。控制非活动缓存/pin 的空闲内存阈值。(--cache-ram)">
+                                    <TextBlock Text="非活动缓存阈值 (GB)" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding Configuration.Cache.InactiveRamThresholdGb, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, TargetNullValue=''}" Width="120"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -430,8 +455,8 @@
                         <Border Style="{StaticResource CardBorder}">
                             <StackPanel>
                                 <CheckBox Content="启用管理器" IsChecked="{Binding Configuration.Manager.EnableManager}" Margin="0,0,0,8" ToolTip="是否启用 ComfyUI-Manager。需已安装 ComfyUI-Manager 插件。"/>
-                                <CheckBox Content="禁用管理器 UI" IsChecked="{Binding Configuration.Manager.DisableManagerUi}" Margin="0,0,0,8" ToolTip="禁用 Manager 的前端 UI 显示。"/>
-                                <CheckBox Content="使用旧版 UI" IsChecked="{Binding Configuration.Manager.EnableLegacyUi}" ToolTip="强制使用旧版 Manager UI。"/>
+                                <CheckBox Content="禁用管理器 UI" IsChecked="{Binding Configuration.Manager.DisableManagerUi}" Margin="0,0,0,8" ToolTip="禁用 Manager UI 和接口；后台计划安装等仍可运行，与旧版 UI 互斥。(--disable-manager-ui)"/>
+                                <CheckBox Content="使用旧版 UI" IsChecked="{Binding Configuration.Manager.EnableLegacyUi}" ToolTip="启用旧版 Manager UI，同时隐含启用 Manager；与禁用 Manager UI 互斥。(--enable-manager-legacy-ui)"/>
                             </StackPanel>
                         </Border>
                     </Expander>
@@ -446,13 +471,13 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,10,0" ToolTip="指定前端版本。(--front-end-version)">
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0" ToolTip="版本格式为 owner/repository@version，version 可为 latest；需要联网下载。(--front-end-version)">
                                     <TextBlock Text="前端版本" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Launch.FrontEndVersion, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Launch.FrontEndVersion, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" ToolTip="前端文件的根目录路径。">
                                     <TextBlock Text="前端根目录" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Launch.FrontEndRoot, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Text="{Binding Configuration.Launch.FrontEndRoot, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                                 </StackPanel>
                             </Grid>
                             <StackPanel Orientation="Horizontal">
@@ -469,23 +494,35 @@
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
                             <WrapPanel Margin="0,0,0,10">
+                                <CheckBox Content="资产内容哈希" IsChecked="{Binding Configuration.Miscellaneous.EnableAssetHashing}" Margin="0,0,20,8" ToolTip="扫描资产时计算 blake3；增加启动与大模型扫描成本，默认关闭。(--enable-asset-hashing)"/>
                                 <CheckBox Content="启用 Assets 系统" IsChecked="{Binding Configuration.Miscellaneous.EnableAssets}" Margin="0,0,20,8" ToolTip="启用 assets API、数据库同步和后台扫描。(--enable-assets)"/>
                                 <CheckBox Content="Force Channels Last" IsChecked="{Binding Configuration.Miscellaneous.ForceChannelsLast}" Margin="0,0,20,8" ToolTip="强制将张量通道放在最后。(--force-channels-last)"/>
                                 <CheckBox Content="支持 FP8 计算" IsChecked="{Binding Configuration.Miscellaneous.SupportsFp8Compute}" Margin="0,0,20,8" ToolTip="启用 FP8 计算支持。仅在部分新显卡上支持。"/>
                                 <CheckBox Content="强制非阻塞" IsChecked="{Binding Configuration.Miscellaneous.ForceNonBlocking}" Margin="0,0,20,8" ToolTip="强制操作非阻塞。(--force-non-blocking)"/>
                                 <CheckBox Content="FP16 中间张量" IsChecked="{Binding Configuration.Miscellaneous.Fp16Intermediates}" Margin="0,0,20,8" ToolTip="实验功能：节点间中间张量使用 FP16。(--fp16-intermediates)"/>
-                                <CheckBox Content="确定性计算" IsChecked="{Binding Configuration.Miscellaneous.Deterministic}" Margin="0,0,20,8" ToolTip="使用确定性算法，使结果可重现。可能会降低性能。(--use-deterministic-algorithms)"/>
+                                <CheckBox Content="确定性计算" IsChecked="{Binding Configuration.Miscellaneous.Deterministic}" Margin="0,0,20,8" ToolTip="使用确定性算法，使结果可重现。可能会降低性能。(--deterministic)"/>
                                 <CheckBox Content="禁用 Mmap" IsChecked="{Binding Configuration.Miscellaneous.DisableMmap}" Margin="0,0,20,8" ToolTip="禁用内存映射文件加载。(--disable-mmap)"/>
                                 <CheckBox Content="禁用 Pinned Memory" IsChecked="{Binding Configuration.Miscellaneous.DisablePinnedMemory}" Margin="0,0,20,8" ToolTip="禁用 pinned memory 使用。(--disable-pinned-memory)"/>
                                 <CheckBox Content="Mmap Torch Files" IsChecked="{Binding Configuration.Miscellaneous.MmapTorchFiles}" Margin="0,0,20,8" ToolTip="对 Torch 文件使用内存映射。"/>
                                 <CheckBox Content="禁用元数据" IsChecked="{Binding Configuration.Miscellaneous.DisableMetadata}" Margin="0,0,20,8" ToolTip="生成的图像不保存元数据（如工作流信息）。(--disable-metadata)"/>
                                 <CheckBox Content="禁用所有自定义节点" IsChecked="{Binding Configuration.Miscellaneous.DisableAllCustomNodes}" Margin="0,0,20,8" ToolTip="禁用所有已安装的自定义节点。(--disable-all-custom-nodes)"/>
-                                <CheckBox Content="禁用 API 节点" IsChecked="{Binding Configuration.Miscellaneous.DisableApiNodes}" Margin="0,0,20,8" ToolTip="禁用 API 相关的节点。"/>
+                                <CheckBox Content="离线模式" IsChecked="{Binding Configuration.Miscellaneous.Offline}" Margin="0,0,20,8" ToolTip="限制前端联网并禁用 Partner 节点。(--offline)"/>
+                                <CheckBox Content="仅禁用 Partner 节点" IsChecked="{Binding Configuration.Miscellaneous.DisablePartnerNodes}" Margin="0,0,20,8" ToolTip="禁用付费 API 节点，前端仍可联网。(--disable-partner-nodes)"/>
                                 <CheckBox Content="多用户模式" IsChecked="{Binding Configuration.Miscellaneous.MultiUser}" Margin="0,0,20,8" ToolTip="启用多用户支持。(--multi-user)"/>
                                 <CheckBox Content="日志输出到 Stdout" IsChecked="{Binding Configuration.Miscellaneous.LogStdout}" Margin="0,0,20,8" ToolTip="将日志输出到标准输出流。"/>
                                 <CheckBox Content="压缩响应体" IsChecked="{Binding Configuration.Miscellaneous.EnableCompressResponseBody}" Margin="0,0,20,8" ToolTip="启用 HTTP 响应体压缩。"/>
                             </WrapPanel>
 
+                            <WrapPanel Margin="0,0,0,10">
+                                <StackPanel Margin="0,0,20,10" ToolTip="Default 保持默认关闭；Enable 启用 comfy-kitchen Triton；Disable 强制禁用，需要已安装相应依赖。">
+                                    <TextBlock Text="Triton 后端" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox ItemsSource="{Binding FeatureModes}" SelectedItem="{Binding Configuration.Miscellaneous.TritonMode}" Width="180"/>
+                                </StackPanel>
+                                <CheckBox Content="禁用 CUDA Graphs" IsChecked="{Binding Configuration.Miscellaneous.DisableCudaGraphs}" Margin="0,0,20,8" ToolTip="禁用 CUDA graphs。(--disable-cuda-graphs)"/>
+                                <CheckBox Content="禁用 Comfy Compiler" IsChecked="{Binding Configuration.Miscellaneous.DisableComfyCompiler}" Margin="0,0,20,8" ToolTip="同时禁用其 CUDA graph 子功能。(--disable-comfy-compiler)"/>
+                                <CheckBox Content="图断裂检查" IsChecked="{Binding Configuration.Miscellaneous.AssertGraphBreaks}" Margin="0,0,20,8" ToolTip="编译器出现 graph break 时失败，供调试使用。(--assert-graph-breaks)"/>
+                                <CheckBox Content="挂起调试" IsChecked="{Binding Configuration.Miscellaneous.DebugHang}" Margin="0,0,20,8" ToolTip="Ctrl-C 时打印线程堆栈，供调试挂起使用。(--debug-hang)"/>
+                            </WrapPanel>
                             <WrapPanel Margin="0,0,0,10">
                                 <StackPanel Margin="0,0,20,10" ToolTip="控制 cudaMallocAsync 策略。Enable 强制启用，Disable 强制禁用，其余保持 ComfyUI 默认行为。">
                                     <TextBlock Text="CUDA Malloc" Style="{StaticResource FieldLabel}"/>
@@ -493,32 +530,64 @@
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,10" ToolTip="设置默认的哈希函数。默认为 sha256。">
                                     <TextBlock Text="默认哈希函数" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Miscellaneous.DefaultHashingFunction, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
+                                    <TextBox Text="{Binding Configuration.Miscellaneous.DefaultHashingFunction, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="180"/>
                                 </StackPanel>
-                                <StackPanel Margin="0,0,20,10" ToolTip="设置日志详细级别。默认为 info。(--verbose, --quiet)">
+                                <StackPanel Margin="0,0,20,10" ToolTip="控制台日志默认 INFO，支持 DEBUG、DETAIL、INFO、WARNING、ERROR、CRITICAL。(--verbose LEVEL)">
                                     <TextBlock Text="日志级别" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding Configuration.Miscellaneous.Verbose}" Width="150"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,0,10" ToolTip="设置 ComfyUI API 的基础 URL。">
                                     <TextBlock Text="Comfy API Base" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox Text="{Binding Configuration.Miscellaneous.ComfyApiBase, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                                    <TextBox Text="{Binding Configuration.Miscellaneous.ComfyApiBase, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="200"/>
                                 </StackPanel>
                             </WrapPanel>
 
                             <StackPanel Margin="0,0,0,10" ToolTip="设置数据库连接字符串。">
                                 <TextBlock Text="数据库 URL" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding Configuration.Miscellaneous.DatabaseUrl, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Text="{Binding Configuration.Miscellaneous.DatabaseUrl, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
                             </StackPanel>
 
-                            <StackPanel Margin="0,0,0,10" ToolTip="启用快速启动选项。每行一个选项。(--fast)">
+                            <StackPanel Margin="0,0,0,10" ToolTip="服务器 feature flag，每行 KEY 或 KEY=VALUE；值中的逗号保留。(--feature-flag)">
+                                <TextBlock Text="Feature flags" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding FeatureFlagsText, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" AcceptsReturn="True" Height="70" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,0,10" ToolTip="每个文件独立指定日志级别；文件路径可含空格。(--verbose LEVEL FILE)">
+                                <TextBlock Text="日志文件输出" Style="{StaticResource FieldLabel}"/>
+                                <ItemsControl ItemsSource="{Binding Configuration.Miscellaneous.LogFiles}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="130"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ComboBox ItemsSource="{Binding DataContext.LogLevels, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          SelectedItem="{Binding Level}" Margin="0,0,10,0"/>
+                                                <TextBox Grid.Column="1" Text="{Binding Path, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
+                                                <Button Grid.Column="2" Content="删除"
+                                                        Command="{Binding DataContext.RemoveLogFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" Style="{DynamicResource SecondaryButtonStyle}" Margin="10,0,0,0"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="添加日志文件" Command="{Binding AddLogFileCommand}" Style="{DynamicResource SecondaryButtonStyle}" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,20,10" ToolTip="Off 关闭；All 启用所有实验优化（--fast）；Selected 仅启用下列指定项。可能降低质量或导致崩溃。">
+                                <TextBlock Text="快速优化模式" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding FastModes}" SelectedItem="{Binding Configuration.Miscellaneous.FastMode}" Width="180" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,0,10" ToolTip="每行一项，只允许下方列出的官方选项。(--fast)">
                                 <TextBlock Text="快速选项 (Fast Options)" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding FastOptionsText, UpdateSourceTrigger=PropertyChanged}"
-                                         AcceptsReturn="True" Height="60" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding FastOptionsHint}" Foreground="#A0A0A0" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <TextBox Text="{Binding FastOptionsText, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
+                                         AcceptsReturn="True" Height="90" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
                             </StackPanel>
 
-                            <StackPanel ToolTip="自定义节点白名单。只有在名单中的节点会被加载。每行一个名称。">
+                            <StackPanel ToolTip="禁用所有自定义节点时仍允许加载的文件夹名称，每行一个。(--whitelist-custom-nodes)">
                                 <TextBlock Text="自定义节点白名单" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding WhitelistCustomNodesText, UpdateSourceTrigger=PropertyChanged}"
+                                <TextBox Text="{Binding WhitelistCustomNodesText, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
                                          AcceptsReturn="True" Height="60" TextWrapping="Wrap"/>
                             </StackPanel>
                         </StackPanel>
