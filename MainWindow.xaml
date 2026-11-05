@@ -137,6 +137,55 @@
                     </StackPanel>
 
                     <!-- Center: CPU + Multi-GPU Rings -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                ToolTip="正在读取 CPU、内存和 GPU 状态"
+                                AutomationProperties.Name="正在读取硬件状态"
+                                AutomationProperties.LiveSetting="Polite">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsHardwareStatusLoading}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Grid Width="40" Height="40" Margin="8,0,0,0">
+                            <Ellipse Stroke="#3A3A3A" StrokeThickness="3" Margin="5"/>
+                            <Path Data="M 20,5 A 15,15 0 1 1 5,20"
+                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="3"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform>
+                                    <RotateTransform/>
+                                </Path.RenderTransform>
+                                <Path.Style>
+                                    <Style TargetType="Path">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsVisible" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard x:Name="HardwareLoadingSpin">
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                             From="0" To="360" Duration="0:0:0.9"
+                                                                             RepeatBehavior="Forever"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <StopStoryboard BeginStoryboardName="HardwareLoadingSpin"/>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                            </Path>
+                        </Grid>
+                        <TextBlock Text="正在读取硬件…" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="8,0"/>
+                    </StackPanel>
                     <StackPanel Grid.Column="2"
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Center"
@@ -146,6 +195,9 @@
                                 <Setter Property="Visibility" Value="Visible"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding CpuStatusItem.DisplayName}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsHardwareStatusLoading}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>

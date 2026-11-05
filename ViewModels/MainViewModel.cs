@@ -65,6 +65,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private GpuRingStatusItem _cpuStatusItem = new();
 
+    [ObservableProperty]
+    private bool _isHardwareStatusLoading = true;
+
     public ObservableCollection<SystemStatusItem> ComfyUiSystemRows { get; } = new();
     public ObservableCollection<SystemDeviceItem> ComfyUiDeviceRows { get; } = new();
     public ObservableCollection<GpuRingStatusItem> GpuStatusItems { get; } = new();
@@ -561,6 +564,8 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        // 已有数据时继续显示圆环，避免定时采样导致加载动画反复闪烁。
+        IsHardwareStatusLoading = string.IsNullOrEmpty(CpuStatusItem.DisplayName);
         try
         {
             var snapshot = await Task.Run(() => _hardwareMonitorService.GetSnapshot());
@@ -648,6 +653,7 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
+            IsHardwareStatusLoading = false;
             Interlocked.Exchange(ref _gpuStatusRefreshInProgress, 0);
         }
     }
