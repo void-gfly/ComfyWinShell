@@ -226,29 +226,40 @@
                                                    FontSize="10"
                                                    Foreground="#A8CFFF"
                                                    Margin="0,0,6,0"/>
-                                        <Grid Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,4,0">
-                                            <Grid.ToolTip>
+                                        <Button Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                Click="GpuPowerButton_Click" Cursor="Hand" Padding="0"
+                                                Background="Transparent" BorderThickness="0"
+                                                AutomationProperties.Name="调节 GPU 功耗">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                            <Button.ToolTip>
                                                 <ToolTip>
                                                     <StackPanel>
                                                         <TextBlock Text="{Binding DetailedName}"/>
                                                         <TextBlock Text="{Binding LoadTooltipValue}" Opacity="0.8"/>
+                                                        <TextBlock Text="单击调节 GPU 功耗" Opacity="0.8"/>
                                                     </StackPanel>
                                                 </ToolTip>
-                                            </Grid.ToolTip>
-                                            <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
-                                            <Path Data="{Binding LoadArcData}"
-                                                  Stroke="{Binding LoadRingColor}"
-                                                  StrokeThickness="4"
-                                                  StrokeStartLineCap="Round"
-                                                  StrokeEndLineCap="Round"
-                                                  Fill="Transparent"/>
-                                            <TextBlock Text="{Binding LoadPercentText}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       FontSize="9"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#DDEEFF"/>
-                                        </Grid>
+                                            </Button.ToolTip>
+                                            <Grid Width="40" Height="40">
+                                                <Ellipse Stroke="#3A3A3A" StrokeThickness="4" Fill="Transparent"/>
+                                                <Path Data="{Binding LoadArcData}"
+                                                      Stroke="{Binding LoadRingColor}"
+                                                      StrokeThickness="4"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      Fill="Transparent"/>
+                                                <TextBlock Text="{Binding LoadPercentText}"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="9"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#DDEEFF"/>
+                                            </Grid>
+                                        </Button>
                                         <Grid Width="40" Height="40" VerticalAlignment="Center">
                                             <Grid.ToolTip>
                                                 <ToolTip>

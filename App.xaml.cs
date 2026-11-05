@@ -247,6 +247,7 @@ namespace WpfDesktop
                     services.AddSingleton<IComfyManagerSettingsService, ComfyManagerSettingsService>();
                     services.AddSingleton<IGitService, GitService>();
                     services.AddSingleton<IExternalProcessRunner, ExternalProcessRunner>();
+                    services.AddSingleton<IGpuPowerService, GpuPowerService>();
                     services.AddSingleton<ICustomNodeInstallerService, CustomNodeInstallerService>();
                     services.AddSingleton<IProcessService, ProcessService>();
                     services.AddSingleton<IHardwareMonitorService, HardwareMonitorService>();

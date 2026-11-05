@@ -18,16 +18,20 @@ namespace WpfDesktop
     {
         private readonly IProcessService _processService;
         private readonly MainViewModel _viewModel;
+        private readonly IGpuPowerService _gpuPowerService;
+        private GpuPowerWindow? _gpuPowerWindow;
         private bool _allowClose;
         private bool _shutdownInProgress;
         private TaskbarIcon? _trayIcon;
         private MenuItem? _appNameMenuItem;
         private MenuItem? _serviceMenuItem;
 
-        public MainWindow(MainViewModel viewModel, IProcessService processService)
+        public MainWindow(MainViewModel viewModel, IProcessService processService,
+            IGpuPowerService gpuPowerService)
         {
             _processService = processService;
             _viewModel = viewModel;
+            _gpuPowerService = gpuPowerService;
 
             Debug.WriteLine($"MainWindow 构造函数: viewModel={viewModel != null}");
             Debug.WriteLine($"MainWindow 构造函数: CurrentView={viewModel?.CurrentView?.GetType().Name ?? "null"}");
@@ -38,6 +42,22 @@ namespace WpfDesktop
             Debug.WriteLine($"MainWindow DataContext 设置完成: {DataContext != null}");
 
             InitializeTrayIcon();
+        }
+
+        private void GpuPowerButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_gpuPowerWindow != null)
+            {
+                _gpuPowerWindow.Activate();
+                return;
+            }
+
+            _gpuPowerWindow = new GpuPowerWindow(new GpuPowerViewModel(_gpuPowerService))
+            {
+                Owner = this
+            };
+            _gpuPowerWindow.Closed += (_, _) => _gpuPowerWindow = null;
+            _gpuPowerWindow.Show();
         }
 
         private void InitializeTrayIcon()
