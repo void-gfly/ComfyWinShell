@@ -10,6 +10,7 @@ namespace WpfDesktop.Services;
 public class HardwareMonitorService : IHardwareMonitorService
 {
     private HwInfo? _hwInfo;
+    private readonly object _syncRoot = new();
     private readonly ICudaDeviceDiscoveryService _cudaDeviceDiscoveryService;
     private readonly ILogService _logService;
     private bool _initialized;
@@ -28,21 +29,24 @@ public class HardwareMonitorService : IHardwareMonitorService
     /// <returns>当前硬件信息快照。</returns>
     public HwInfoSnapshot GetSnapshot()
     {
-        EnsureInitialized();
-        if (_hwInfo == null)
+        lock (_syncRoot)
         {
-            return new HwInfoSnapshot();
-        }
+            EnsureInitialized();
+            if (_hwInfo == null)
+            {
+                return new HwInfoSnapshot();
+            }
 
-        var snapshot = _hwInfo.GetSnapshot();
-        var cudaDevices = _cudaDeviceDiscoveryService.GetCudaDevices();
-        if (snapshot.Gpus.Count == 0 || cudaDevices.Count == 0)
-        {
+            var snapshot = _hwInfo.GetSnapshot();
+            var cudaDevices = _cudaDeviceDiscoveryService.GetCudaDevices();
+            if (snapshot.Gpus.Count == 0 || cudaDevices.Count == 0)
+            {
+                return snapshot;
+            }
+
+            snapshot.Gpus = CudaDeviceOrderHelper.OrderGpusByCudaDevices(snapshot.Gpus, cudaDevices);
             return snapshot;
         }
-
-        snapshot.Gpus = CudaDeviceOrderHelper.OrderGpusByCudaDevices(snapshot.Gpus, cudaDevices);
-        return snapshot;
     }
 
     /// <summary>
@@ -70,6 +74,9 @@ public class HardwareMonitorService : IHardwareMonitorService
     /// </summary>
     public void Dispose()
     {
-        _hwInfo?.Dispose();
+        lock (_syncRoot)
+        {
+            _hwInfo?.Dispose();
+        }
     }
 }

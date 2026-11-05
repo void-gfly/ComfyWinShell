@@ -34,11 +34,7 @@ namespace WpfDesktop.Services
         private readonly ILogService? _logService;
         private bool _disposed;
 
-        private System.Diagnostics.PerformanceCounter? _diskReadCounter;
-        private System.Diagnostics.PerformanceCounter? _diskWriteCounter;
-        private System.Diagnostics.PerformanceCounter? _memoryPagesOutputCounter;
-        private bool _perfCountersInitialized;
-        private bool _memoryPerfCountersInitialized;
+        private readonly HardwarePerformanceSampler _performanceSampler;
 
         private long _lastNetReceivedBytes = -1;
         private long _lastNetSentBytes = -1;
@@ -47,6 +43,7 @@ namespace WpfDesktop.Services
         public HwInfo(ILogService? logService = null)
         {
             _logService = logService;
+            _performanceSampler = new HardwarePerformanceSampler(logService);
             _computer = new Computer
             {
                 IsCpuEnabled = true,
@@ -80,9 +77,10 @@ namespace WpfDesktop.Services
             {
                 _computer.Accept(_visitor);
             }
-            catch
+            catch (Exception ex)
             {
-                return new HwInfoSnapshot();
+                _logService?.LogError("更新硬件传感器失败", ex);
+                throw;
             }
 
             var cpuHardware = EnumerateHardware(_computer).Where(h => h.HardwareType == HardwareType.Cpu).ToList();
@@ -103,8 +101,9 @@ namespace WpfDesktop.Services
 
             var (memUsed, memTotal) = SelectMemoryUsage(memorySensors, preferPhysicalMemory: true);
 
-            var (diskReadMb, diskWriteMb) = SelectDiskRates(storageSensors);
-            var memoryPagesOutputPerSec = GetMemoryPagesOutputRate();
+            var performance = _performanceSampler.GetSnapshot();
+            var (diskReadMb, diskWriteMb) = SelectDiskRates(storageSensors, performance);
+            var memoryPagesOutputPerSec = performance.MemoryPagesOutputPerSec;
             var (netDownloadMb, netUploadMb) = GetNetworkRates();
 
             // 收集每个 GPU 的信息
@@ -158,9 +157,7 @@ namespace WpfDesktop.Services
                 _computer.Close();
             }
 
-            _diskReadCounter?.Dispose();
-            _diskWriteCounter?.Dispose();
-            _memoryPagesOutputCounter?.Dispose();
+            _performanceSampler.Dispose();
 
             _disposed = true;
         }
@@ -265,7 +262,8 @@ namespace WpfDesktop.Services
             return values.Max();
         }
 
-        private (double? readMb, double? writeMb) SelectDiskRates(IEnumerable<ISensor> sensors)
+        private (double? readMb, double? writeMb) SelectDiskRates(
+            IEnumerable<ISensor> sensors, HardwarePerformanceSnapshot performance)
         {
             var rateSensors = sensors.Where(s => s.SensorType == SensorType.Throughput || s.SensorType == SensorType.Data || s.SensorType == SensorType.SmallData).ToList();
             var readRates = rateSensors.Where(s => s.Name?.IndexOf("Read Rate", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
@@ -276,93 +274,13 @@ namespace WpfDesktop.Services
 
             if (readRates.Count == 0 && writeRates.Count == 0)
             {
-                return GetDiskRateFromPerformanceCounters();
+                return (performance.DiskReadMb, performance.DiskWriteMb);
             }
 
             var readMbPerSec = readBytesPerSec / (1024.0 * 1024.0);
             var writeMbPerSec = writeBytesPerSec / (1024.0 * 1024.0);
 
             return (readRates.Count > 0 ? readMbPerSec : null, writeRates.Count > 0 ? writeMbPerSec : null);
-        }
-
-        private (double? readMb, double? writeMb) GetDiskRateFromPerformanceCounters()
-        {
-            if (!_perfCountersInitialized)
-            {
-                _perfCountersInitialized = true;
-                try
-                {
-#pragma warning disable CA1416
-                    _diskReadCounter = new System.Diagnostics.PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total", true);
-                    _diskWriteCounter = new System.Diagnostics.PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total", true);
-                    _diskReadCounter.NextValue();
-                    _diskWriteCounter.NextValue();
-#pragma warning restore CA1416
-                }
-                catch (Exception ex)
-                {
-                    _logService?.LogError("磁盘性能计数器初始化失败(非管理员可能引发)", ex);
-                    _diskReadCounter?.Dispose();
-                    _diskWriteCounter?.Dispose();
-                    _diskReadCounter = null;
-                    _diskWriteCounter = null;
-                }
-            }
-
-            if (_diskReadCounter != null && _diskWriteCounter != null)
-            {
-                try
-                {
-#pragma warning disable CA1416
-                    double readMb = _diskReadCounter.NextValue() / (1024.0 * 1024.0);
-                    double writeMb = _diskWriteCounter.NextValue() / (1024.0 * 1024.0);
-                    return (readMb, writeMb);
-#pragma warning restore CA1416
-                }
-                catch
-                {
-                    return (null, null);
-                }
-            }
-
-            return (null, null);
-        }
-
-        private double? GetMemoryPagesOutputRate()
-        {
-            if (!_memoryPerfCountersInitialized)
-            {
-                _memoryPerfCountersInitialized = true;
-                try
-                {
-#pragma warning disable CA1416
-                    _memoryPagesOutputCounter = new System.Diagnostics.PerformanceCounter("Memory", "Pages Output/sec", true);
-                    _memoryPagesOutputCounter.NextValue();
-#pragma warning restore CA1416
-                }
-                catch (Exception ex)
-                {
-                    _logService?.LogError("内存分页交换性能计数器初始化失败(非管理员可能引发)", ex);
-                    _memoryPagesOutputCounter?.Dispose();
-                    _memoryPagesOutputCounter = null;
-                }
-            }
-
-            if (_memoryPagesOutputCounter != null)
-            {
-                try
-                {
-#pragma warning disable CA1416
-                    return _memoryPagesOutputCounter.NextValue();
-#pragma warning restore CA1416
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-
-            return null;
         }
 
         private (double? downloadMb, double? uploadMb) GetNetworkRates()
