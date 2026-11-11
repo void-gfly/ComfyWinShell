@@ -70,17 +70,25 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
-                        <Button Content="刷新"
-                                Command="{Binding RefreshCommand}"
-                                Style="{DynamicResource SecondaryButtonStyle}"
-                                Width="80"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="升级 ComfyUI-Manager"
+                                    Command="{Binding UpgradeManagerCommand}"
+                                    Style="{DynamicResource PrimaryButtonStyle}"
+                                    Padding="14,6"
+                                    Margin="0,0,8,0"
+                                    ToolTip="在当前 ComfyUI 的 Python 环境中执行 pip install -U comfyui-manager"/>
+                            <Button Content="刷新"
+                                    Command="{Binding RefreshCommand}"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Width="80"/>
+                        </StackPanel>
                         <TextBlock Text="{Binding StatusMessage}"
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    HorizontalAlignment="Right"
                                    Margin="0,10,0,0"
                                    FontSize="12"
-                                   MaxWidth="200"
+                                   MaxWidth="360"
                                    TextWrapping="Wrap"
                                    TextAlignment="Right"/>
                     </StackPanel>

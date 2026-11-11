@@ -15,6 +15,8 @@ public partial class VersionManagerViewModel : ViewModelBase
     private readonly IGitService _gitService;
     private readonly IPythonPathService _pythonPathService;
     private readonly IProcessService _processService;
+    private readonly IComfyManagerUpgradeService _comfyManagerUpgradeService;
+    private readonly IDialogService _dialogService;
     private readonly ILogService _logService;
 
     public VersionManagerViewModel(
@@ -22,12 +24,16 @@ public partial class VersionManagerViewModel : ViewModelBase
         IGitService gitService,
         IPythonPathService pythonPathService,
         IProcessService processService,
+        IComfyManagerUpgradeService comfyManagerUpgradeService,
+        IDialogService dialogService,
         ILogService logService)
     {
         _comfyPathService = comfyPathService;
         _gitService = gitService;
         _pythonPathService = pythonPathService;
         _processService = processService;
+        _comfyManagerUpgradeService = comfyManagerUpgradeService;
+        _dialogService = dialogService;
         _logService = logService;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
@@ -63,12 +69,71 @@ public partial class VersionManagerViewModel : ViewModelBase
     [ObservableProperty]
     private string _notFoundMessage = "";
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UpgradeManagerCommand))]
+    private bool _isUpgradingManager;
+
     public IAsyncRelayCommand RefreshCommand { get; }
     public IAsyncRelayCommand<GitCommit> SwitchVersionCommand { get; }
 
+    [RelayCommand(CanExecute = nameof(CanUpgradeManager))]
+    private async Task UpgradeManagerAsync()
+    {
+        try
+        {
+            IsUpgradingManager = true;
+            StatusMessage = "正在升级 ComfyUI-Manager...";
+
+            var status = await _processService.GetStatusAsync();
+            if (status?.IsRunning == true)
+            {
+                var shouldStop = _dialogService.Confirm(
+                    "ComfyUI 当前正在运行。升级 ComfyUI-Manager 会修改 Python 依赖，需要先停止 ComfyUI。\n\n是否现在停止并继续升级？",
+                    "升级 ComfyUI-Manager");
+                if (!shouldStop)
+                {
+                    StatusMessage = "已取消升级";
+                    return;
+                }
+
+                StatusMessage = "正在停止 ComfyUI...";
+                var stopped = await _processService.StopAsync();
+                if (!stopped)
+                {
+                    StatusMessage = "停止 ComfyUI 失败，已取消升级";
+                    return;
+                }
+            }
+
+            StatusMessage = "正在升级 ComfyUI-Manager...";
+            var result = await _comfyManagerUpgradeService.UpgradeAsync();
+            if (!result.Success)
+            {
+                StatusMessage = "升级 ComfyUI-Manager 失败";
+                _dialogService.ShowError(result.ErrorMessage, "升级 ComfyUI-Manager 失败");
+                return;
+            }
+
+            StatusMessage = "ComfyUI-Manager 已升级，请重新启动";
+            _dialogService.ShowInfo("ComfyUI-Manager 已升级。请重新启动 ComfyUI 后生效。", "升级完成");
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("升级 ComfyUI-Manager 失败", ex);
+            StatusMessage = "升级 ComfyUI-Manager 失败";
+            _dialogService.ShowError(ex.Message, "升级 ComfyUI-Manager 失败");
+        }
+        finally
+        {
+            IsUpgradingManager = false;
+        }
+    }
+
+    private bool CanUpgradeManager() => !IsUpgradingManager;
+
     private async Task RefreshAsync()
     {
-        if (IsLoading) return;
+        if (IsLoading || IsUpgradingManager) return;
 
         IsLoading = true;
         StatusMessage = "正在检测 ComfyUI...";
@@ -164,7 +229,7 @@ public partial class VersionManagerViewModel : ViewModelBase
 
     private async Task SwitchVersionAsync(GitCommit? commit)
     {
-        if (commit == null || string.IsNullOrEmpty(ComfyUiPath)) return;
+        if (commit == null || string.IsNullOrEmpty(ComfyUiPath) || IsUpgradingManager) return;
 
         // 检查 ComfyUI 是否正在运行
         var status = await _processService.GetStatusAsync();
