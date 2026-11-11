@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -19,6 +21,8 @@ public partial class ProcessMonitorViewModel : ViewModelBase
     private readonly ILogService _logService;
     private readonly IEnvironmentCheckService _environmentCheckService;
     private readonly IPythonPathService _pythonPathService;
+    private readonly IComfyPathService _comfyPathService;
+    private readonly IDialogService _dialogService;
     private int _maxLogLines = 5000;
 
     // tqdm 进度条模式匹配：匹配类似 "  5%|█         | 1/20 [00:10<03:24, 10.77s/it]" 的输出
@@ -34,19 +38,24 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         ISettingsService settingsService, 
         ILogService logService,
         IEnvironmentCheckService environmentCheckService,
-        IPythonPathService pythonPathService)
+        IPythonPathService pythonPathService,
+        IComfyPathService comfyPathService,
+        IDialogService dialogService)
     {
         _processService = processService;
         _settingsService = settingsService;
         _logService = logService;
         _environmentCheckService = environmentCheckService;
         _pythonPathService = pythonPathService;
+        _comfyPathService = comfyPathService;
+        _dialogService = dialogService;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ClearLogsCommand = new RelayCommand(ClearLogs);
         CopySelectedLogsCommand = new RelayCommand<IList>(CopySelectedLogs);
         CopyAllLogsCommand = new RelayCommand(CopyAllLogs, () => Logs.Count > 0);
         CheckEnvironmentCommand = new AsyncRelayCommand(CheckEnvironmentAsync, () => !IsCheckingEnvironment);
+        OpenExternalConsoleCommand = new RelayCommand(OpenExternalConsole);
 
         _processService.StatusChanged += OnStatusChanged;
         _processService.OutputReceived += OnOutputReceived;
@@ -105,6 +114,8 @@ public partial class ProcessMonitorViewModel : ViewModelBase
 
     public IAsyncRelayCommand CheckEnvironmentCommand { get; }
 
+    public IRelayCommand OpenExternalConsoleCommand { get; }
+
     [ObservableProperty]
     private bool _isCheckingEnvironment;
 
@@ -132,6 +143,74 @@ public partial class ProcessMonitorViewModel : ViewModelBase
         {
             IsCheckingEnvironment = false;
             CheckEnvironmentCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private void OpenExternalConsole()
+    {
+        var comfyRoot = _comfyPathService.ComfyRootPath;
+        if (!_comfyPathService.IsValid || string.IsNullOrWhiteSpace(comfyRoot))
+        {
+            const string message = "未检测到 ComfyUI 根目录，无法打开外部控制台。";
+            _logService.LogError(message);
+            _dialogService.ShowError(message);
+            return;
+        }
+
+        _pythonPathService.Resolve(comfyRoot);
+        var pythonPath = _pythonPathService.PythonPath;
+        if (!_pythonPathService.IsValid || string.IsNullOrWhiteSpace(pythonPath))
+        {
+            const string message = "未能定位 ComfyUI 使用的 Python 环境。";
+            _logService.LogError(message);
+            _dialogService.ShowError(message);
+            return;
+        }
+
+        var pythonDir = Path.GetDirectoryName(pythonPath);
+        if (string.IsNullOrWhiteSpace(pythonDir))
+        {
+            const string message = "未能定位 ComfyUI 使用的 Python 环境。";
+            _logService.LogError(message);
+            _dialogService.ShowError(message);
+            return;
+        }
+
+        var pathPrefix = pythonDir;
+        var scriptsDir = Path.Combine(pythonDir, "Scripts");
+        if (Directory.Exists(scriptsDir))
+        {
+            pathPrefix = pythonDir + Path.PathSeparator + scriptsDir;
+        }
+
+        var currentPath = Environment.GetEnvironmentVariable("PATH");
+        var startInfo = new ProcessStartInfo("cmd.exe")
+        {
+            WorkingDirectory = comfyRoot,
+            UseShellExecute = false
+        };
+        startInfo.Environment["PATH"] = string.IsNullOrEmpty(currentPath)
+            ? pathPrefix
+            : pathPrefix + Path.PathSeparator + currentPath;
+
+        if (string.Equals(Path.GetFileName(pythonDir), "Scripts", StringComparison.OrdinalIgnoreCase))
+        {
+            var venvRoot = Path.GetDirectoryName(pythonDir);
+            if (!string.IsNullOrWhiteSpace(venvRoot))
+            {
+                startInfo.Environment["VIRTUAL_ENV"] = venvRoot;
+            }
+        }
+
+        try
+        {
+            Process.Start(startInfo);
+            _logService.Log($"已打开外部控制台: {pythonPath}");
+        }
+        catch (Exception ex)
+        {
+            _logService.LogError("打开外部控制台失败", ex);
+            _dialogService.ShowError($"打开外部控制台失败: {ex.Message}");
         }
     }
 
